@@ -22,6 +22,7 @@ import {
   ListItemButton,
   ListItemText,
   MenuItem,
+  Pagination,
   Select,
   Stack,
   Table,
@@ -29,6 +30,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Toolbar,
   Typography,
@@ -40,6 +42,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import './App.css'
 
 const STORAGE_KEY = 'eso-guild-bank-management-v1'
+const SESSION_USER_KEY = 'eso-guild-bank-session-user'
 
 const todayString = () => new Date().toISOString().slice(0, 10)
 
@@ -71,6 +74,11 @@ const parseStoredState = () => {
   }
 }
 
+const parseStoredSessionUser = () => {
+  const raw = localStorage.getItem(SESSION_USER_KEY)
+  return raw?.trim() ? raw : null
+}
+
 const createEntry = (draft) => ({
   id: crypto.randomUUID(),
   type: draft.type,
@@ -91,6 +99,29 @@ const defaultEntryDraft = {
   date: todayString(),
   notes: '',
 }
+
+const entryPageSizeOptions = [10, 25, 50, 100]
+
+const sortableEntryColumns = {
+  date: {
+    label: 'Date',
+    getValue: (entry) => entry.date,
+  },
+  type: {
+    label: 'Type',
+    getValue: (entry) => entryTypes.find((entryType) => entryType.value === entry.type)?.label ?? '',
+  },
+  amount: {
+    label: 'Amount',
+    getValue: (entry) => Number(entry.amount) || 0,
+  },
+  notes: {
+    label: 'Notes',
+    getValue: (entry) => entry.notes || '',
+  },
+}
+
+const guildDrawerWidth = 320
 
 const isoToDay = (isoDate) => new Date(`${isoDate}T00:00:00`)
 
@@ -156,7 +187,7 @@ const theme = createTheme({
 
 function App() {
   const [appState, setAppState] = useState(parseStoredState)
-  const [sessionUser, setSessionUser] = useState(null)
+  const [sessionUser, setSessionUser] = useState(parseStoredSessionUser)
   const [entryDraft, setEntryDraft] = useState(defaultEntryDraft)
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState('login')
@@ -164,6 +195,9 @@ function App() {
   const [authError, setAuthError] = useState('')
   const [newGuildName, setNewGuildName] = useState('')
   const [editingEntry, setEditingEntry] = useState(null)
+  const [entryPage, setEntryPage] = useState(1)
+  const [entriesPerPage, setEntriesPerPage] = useState(entryPageSizeOptions[0])
+  const [entrySort, setEntrySort] = useState({ column: 'date', direction: 'desc' })
 
   const currentUser = sessionUser ? appState.users[sessionUser] : null
   const selectedGuild =
@@ -178,7 +212,54 @@ function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appState))
   }, [appState])
 
+  useEffect(() => {
+    if (sessionUser && !appState.users[sessionUser]) {
+      setSessionUser(null)
+    }
+  }, [appState.users, sessionUser])
+
+  useEffect(() => {
+    if (sessionUser) {
+      localStorage.setItem(SESSION_USER_KEY, sessionUser)
+      return
+    }
+
+    localStorage.removeItem(SESSION_USER_KEY)
+  }, [sessionUser])
+
+  useEffect(() => {
+    setEntryPage(1)
+  }, [sessionUser, selectedGuild?.id, entriesPerPage, entrySort.column, entrySort.direction])
+
   const stats = statsRows(activeEntries, weekStartDate)
+  const sortedEntries = [...activeEntries].sort((leftEntry, rightEntry) => {
+    const leftValue = sortableEntryColumns[entrySort.column].getValue(leftEntry)
+    const rightValue = sortableEntryColumns[entrySort.column].getValue(rightEntry)
+
+    if (leftValue === rightValue) {
+      return 0
+    }
+
+    if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+      return entrySort.direction === 'asc' ? leftValue - rightValue : rightValue - leftValue
+    }
+
+    const comparison = String(leftValue).localeCompare(String(rightValue), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    })
+
+    return entrySort.direction === 'asc' ? comparison : -comparison
+  })
+  const totalEntryPages = Math.max(1, Math.ceil(sortedEntries.length / entriesPerPage))
+  const visibleEntries = sortedEntries.slice(
+    (entryPage - 1) * entriesPerPage,
+    entryPage * entriesPerPage,
+  )
+
+  useEffect(() => {
+    setEntryPage((prev) => Math.min(prev, totalEntryPages))
+  }, [totalEntryPages])
 
   const updateGuest = (updater) => {
     setAppState((prev) => ({
@@ -211,6 +292,13 @@ function App() {
       guilds: user.guilds.map((guild) =>
         guild.id === selectedGuild.id ? updater(guild) : guild,
       ),
+    }))
+  }
+
+  const handleEntrySort = (column) => {
+    setEntrySort((prev) => ({
+      column,
+      direction: prev.column === column && prev.direction === 'asc' ? 'desc' : 'asc',
     }))
   }
 
@@ -449,7 +537,7 @@ function App() {
         </AppBar>
 
         <Box sx={{ display: 'flex' }}>
-          <Box sx={{ flexGrow: 1, p: 3, pr: sessionUser ? 38 : 3 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
             <Typography variant="h4" gutterBottom>
               Track Guild Gold Flow
             </Typography>
@@ -574,16 +662,91 @@ function App() {
 
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Log Entries
-                </Typography>
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  spacing={2}
+                  useFlexGap
+                  justifyContent="space-between"
+                  alignItems={{ xs: 'stretch', md: 'center' }}
+                  sx={{ mb: 2 }}
+                >
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={2}
+                    useFlexGap
+                    alignItems={{ xs: 'stretch', sm: 'center' }}
+                  >
+                    <Typography variant="h6">Log Entries</Typography>
+                    <Pagination
+                      color="primary"
+                      count={totalEntryPages}
+                      page={entryPage}
+                      onChange={(_event, value) => setEntryPage(value)}
+                      size="small"
+                      showFirstButton
+                      showLastButton
+                      siblingCount={0}
+                      boundaryCount={1}
+                    />
+                  </Stack>
+                  <FormControl size="small" sx={{ minWidth: 150, alignSelf: { xs: 'flex-end', md: 'auto' } }}>
+                    <InputLabel id="entries-per-page-label">Entries per page</InputLabel>
+                    <Select
+                      labelId="entries-per-page-label"
+                      value={entriesPerPage}
+                      label="Entries per page"
+                      onChange={(event) => setEntriesPerPage(Number(event.target.value))}
+                    >
+                      {entryPageSizeOptions.map((pageSize) => (
+                        <MenuItem key={pageSize} value={pageSize}>
+                          {pageSize}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Stack>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell align="right">Amount</TableCell>
-                      <TableCell>Notes</TableCell>
+                      <TableCell sortDirection={entrySort.column === 'date' ? entrySort.direction : false}>
+                        <TableSortLabel
+                          active={entrySort.column === 'date'}
+                          direction={entrySort.column === 'date' ? entrySort.direction : 'asc'}
+                          onClick={() => handleEntrySort('date')}
+                        >
+                          Date
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sortDirection={entrySort.column === 'type' ? entrySort.direction : false}>
+                        <TableSortLabel
+                          active={entrySort.column === 'type'}
+                          direction={entrySort.column === 'type' ? entrySort.direction : 'asc'}
+                          onClick={() => handleEntrySort('type')}
+                        >
+                          Type
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sortDirection={entrySort.column === 'amount' ? entrySort.direction : false}
+                      >
+                        <TableSortLabel
+                          active={entrySort.column === 'amount'}
+                          direction={entrySort.column === 'amount' ? entrySort.direction : 'asc'}
+                          onClick={() => handleEntrySort('amount')}
+                        >
+                          Amount
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sortDirection={entrySort.column === 'notes' ? entrySort.direction : false}>
+                        <TableSortLabel
+                          active={entrySort.column === 'notes'}
+                          direction={entrySort.column === 'notes' ? entrySort.direction : 'asc'}
+                          onClick={() => handleEntrySort('notes')}
+                        >
+                          Notes
+                        </TableSortLabel>
+                      </TableCell>
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -595,7 +758,7 @@ function App() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      activeEntries.map((entry) => (
+                      visibleEntries.map((entry) => (
                         <TableRow key={entry.id}>
                           <TableCell>{entry.date}</TableCell>
                           <TableCell>
@@ -621,8 +784,21 @@ function App() {
           </Box>
 
           {sessionUser && (
-            <Drawer anchor="right" variant="permanent" PaperProps={{ sx: { width: 320, p: 2 } }}>
-              <Toolbar />
+            <Drawer
+              anchor="right"
+              variant="permanent"
+              sx={{
+                width: guildDrawerWidth,
+                flexShrink: 0,
+                '& .MuiDrawer-paper': {
+                  width: guildDrawerWidth,
+                  boxSizing: 'border-box',
+                  p: 2,
+                  top: { xs: 56, sm: 64 },
+                  height: { xs: 'calc(100% - 56px)', sm: 'calc(100% - 64px)' },
+                },
+              }}
+            >
               <Typography variant="h6" sx={{ mt: 1 }}>
                 Guild Profiles
               </Typography>
@@ -671,6 +847,8 @@ function App() {
               </List>
             </Drawer>
           )}
+
+          {sessionUser && <Box sx={{ width: guildDrawerWidth, flexShrink: 0 }} />}
         </Box>
       </Box>
 

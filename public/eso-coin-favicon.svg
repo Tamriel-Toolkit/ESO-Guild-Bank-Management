@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Radial gradient for coin base -->
+    <radialGradient id="coinBase" cx="42%" cy="35%" r="60%">
+      <stop offset="0%"   stop-color="#FFE97A"/>
+      <stop offset="30%"  stop-color="#F5C842"/>
+      <stop offset="65%"  stop-color="#C8931A"/>
+      <stop offset="100%" stop-color="#7A5000"/>
+    </radialGradient>
+
+    <!-- Rim gradient -->
+    <radialGradient id="rimGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="80%"  stop-color="#B07A10"/>
+      <stop offset="100%" stop-color="#5A3800"/>
+    </radialGradient>
+
+    <!-- Highlight sheen -->
+    <radialGradient id="sheen" cx="38%" cy="30%" r="45%">
+      <stop offset="0%"   stop-color="#FFF8C0" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#FFF8C0" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Outer glow filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Drop shadow -->
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="145%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#7A4A00" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Drop shadow layer -->
+  <ellipse cx="32" cy="34" rx="24" ry="5" fill="#7A4A00" opacity="0.25"/>
+
+  <!-- Coin rim / edge -->
+  <circle cx="32" cy="32" r="28" fill="url(#rimGrad)" filter="url(#shadow)"/>
+
+  <!-- Coin face -->
+  <circle cx="32" cy="32" r="25" fill="url(#coinBase)" filter="url(#glow)"/>
+
+  <!-- Inner engraved ring -->
+  <circle cx="32" cy="32" r="22" fill="none" stroke="#C8931A" stroke-width="0.8" opacity="0.6"/>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#FFE070" stroke-width="0.4" opacity="0.4"/>
+
+  <!-- ESO-style rune cross / dragon symbol -->
+  <!-- Vertical bar -->
+  <rect x="30.5" y="18" width="3" height="28" rx="1.5" fill="#7A5000" opacity="0.55"/>
+  <!-- Horizontal bar -->
+  <rect x="18" y="30.5" width="28" height="3" rx="1.5" fill="#7A5000" opacity="0.55"/>
+
+  <!-- Center diamond jewel -->
+  <polygon points="32,27 35.5,32 32,37 28.5,32" fill="#C8931A"/>
+  <polygon points="32,28.2 34.4,32 32,35.8 29.6,32" fill="#FFE97A"/>
+  <polygon points="32,29.5 33.3,32 32,34.5 30.7,32" fill="#FFFBE0"/>
+
+  <!-- Corner rune dots -->
+  <circle cx="22" cy="22" r="1.5" fill="#B07A10" opacity="0.7"/>
+  <circle cx="42" cy="22" r="1.5" fill="#B07A10" opacity="0.7"/>
+  <circle cx="22" cy="42" r="1.5" fill="#B07A10" opacity="0.7"/>
+  <circle cx="42" cy="42" r="1.5" fill="#B07A10" opacity="0.7"/>
+
+  <!-- Highlight sheen overlay -->
+  <circle cx="32" cy="32" r="25" fill="url(#sheen)"/>
+
+  <!-- Rim highlight arc (top-left) -->
+  <path d="M 14 22 A 20 20 0 0 1 36 8" fill="none" stroke="#FFE97A" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+</svg>
