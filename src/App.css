@@ -1,0 +1,4 @@
+.eso-bg {
+  background: radial-gradient(circle at top, rgba(176, 138, 74, 0.18), transparent 50%),
+    linear-gradient(180deg, #15120f 0%, #0f0d0b 100%);
+}
