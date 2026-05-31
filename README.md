@@ -1,29 +1,37 @@
-# ESO-Guild-Bank-Management
+# ESO Guild Gold Ledger
 
-A React + Material UI web app for tracking Elder Scrolls Online guild bank gold flow.
+ESO Guild Gold Ledger is a live web app for tracking Elder Scrolls Online guild bank gold flow across one or more guilds, with secure accounts, shared guild access, and server-backed persistence.
 
-## What changed for publishing
+## Live Site
 
-This app no longer stores account data in browser `localStorage`.
+- Website: `https://www.esoguildgoldledger.com`
+- Render subdomain: `https://eso-guild-bank-management.onrender.com`
 
-- Account data now lives in a server-side SQLite database at `data/guild-bank.db`
-- Passwords are hashed on the server with Node's `crypto.scrypt`
-- Sessions are stored in an HTTP-only cookie instead of browser-managed app state
-- Guest mode is temporary and only meant for pre-login drafting
-- Legacy browser data from the old localStorage-based version can be imported into the secure backend after login
+## Highlights
 
-## Features
+- Secure sign up and login backed by a Node and Express API
+- Server-side SQLite persistence instead of browser-only storage
+- HTTP-only cookie sessions and hashed passwords with Node `crypto.scrypt`
+- Guest mode for temporary drafting before account creation or login
+- One-click import of legacy local browser data after login
+- Multi-guild support with create, rename, delete, and select flows
+- Shared guild access with owner-managed invite codes
+- Invite options for expiration windows and single-use access
+- Member leave flow and owner-only member removal
+- Deposits, withdrawals, and sales tax entry tracking with notes
+- Edit and delete support for existing entries
+- Daily, weekly, monthly, and overall gold statistics
+- Audit logging for important account and guild actions
+- Automatic server-side backup snapshots
 
-- Guest mode for temporary entry drafting before sign-in
-- Log deposits, withdrawals, and sales tax income
-- Optional notes for each log entry
-- Edit and delete entries
-- Daily, weekly, monthly, and overall stats
-- Multi-guild account support with create, rename, delete, and select actions
-- Secure sign up and log in backed by the API server
-- One-click import for legacy browser data from the previous localStorage version
+## Stack
 
-## Run locally
+- React + Vite frontend
+- Material UI interface
+- Node + Express API server
+- SQLite database with `better-sqlite3`
+
+## Local Development
 
 Install dependencies:
 
@@ -31,42 +39,45 @@ Install dependencies:
 npm install
 ```
 
-Start the frontend and API server together for development:
+Run the Vite frontend and API server together:
 
 ```bash
 npm run dev
 ```
 
-Start only the production server locally:
+Build the frontend and run the production server locally:
 
 ```bash
 npm run build
 npm start
 ```
 
-The API server listens on `http://localhost:3001` by default.
+By default, the API server listens on `http://localhost:3001`.
 
-## Publish
+## Deployment
 
-For a simple single-server deployment:
+The app is designed to run as a single Node service in production. The production server serves the built frontend from `dist/` and the API from the same process.
 
-1. Run `npm install`
+Typical production flow:
+
+1. Run `npm install --include=dev`
 2. Run `npm run build`
 3. Set `NODE_ENV=production`
-4. Run `npm start`
+4. Set `DATABASE_FILE` to a persistent disk path
+5. Run `npm start`
 
-The production server will serve the built frontend from `dist/` and the API from the same process.
+For Render-style deployments with SQLite persistence, use a mounted disk path such as `/var/data/guild-bank.db`.
 
-## Environment variables
+## Environment Variables
 
 - `PORT`: API and production web server port. Default: `3001`
-- `DATABASE_FILE`: optional relative path for the SQLite database file
-- `SESSION_COOKIE_NAME`: optional cookie name override
+- `DATABASE_FILE`: SQLite database path. Use a persistent disk path in production.
+- `SESSION_COOKIE_NAME`: optional session cookie name override
 - `SESSION_TTL_DAYS`: session lifetime in days. Default: `14`
 
 ## Validation
 
 ```bash
-npm run lint
+npm test
 npm run build
 ```
