@@ -32,6 +32,7 @@ const backupRetentionCount = Number(process.env.BACKUP_RETENTION_COUNT) || 20
 const backupMinIntervalMs = Number(process.env.BACKUP_MIN_INTERVAL_MS) || 5 * 60 * 1000
 const isProduction = process.env.NODE_ENV === 'production'
 const entryTypes = new Set(['deposit', 'withdrawal', 'salesTax'])
+const withdrawalCategories = new Set(['traderBid', 'heraldry', 'other'])
 const smtpHost = process.env.SMTP_HOST || ''
 const smtpPort = Number(process.env.SMTP_PORT) || 587
 const smtpSecure =
@@ -92,6 +93,8 @@ db.exec(`
     type TEXT NOT NULL,
     amount INTEGER NOT NULL,
     is_donation INTEGER NOT NULL DEFAULT 0,
+    is_due INTEGER NOT NULL DEFAULT 0,
+    withdrawal_category TEXT NOT NULL DEFAULT '',
     date TEXT NOT NULL,
     user_name TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
@@ -183,6 +186,12 @@ if (!userColumns.some((column) => column.name === 'email_verified_at')) {
 }
 if (!entryColumns.some((column) => column.name === 'is_donation')) {
   db.exec('ALTER TABLE entries ADD COLUMN is_donation INTEGER NOT NULL DEFAULT 0')
+}
+if (!entryColumns.some((column) => column.name === 'is_due')) {
+  db.exec('ALTER TABLE entries ADD COLUMN is_due INTEGER NOT NULL DEFAULT 0')
+}
+if (!entryColumns.some((column) => column.name === 'withdrawal_category')) {
+  db.exec("ALTER TABLE entries ADD COLUMN withdrawal_category TEXT NOT NULL DEFAULT ''")
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL')
 
@@ -276,7 +285,7 @@ const statements = {
      LIMIT 1`,
   ),
   listEntriesForGuild: db.prepare(
-    `SELECT id, type, amount, is_donation AS isDonation, date, user_name AS user, notes, created_at AS createdAt
+    `SELECT id, type, amount, is_donation AS isDonation, is_due AS isDue, withdrawal_category AS withdrawalCategory, date, user_name AS user, notes, created_at AS createdAt
      FROM entries
      WHERE guild_id = ?
      ORDER BY date DESC, created_at DESC, id DESC`,
@@ -346,11 +355,11 @@ const statements = {
      VALUES (@actorUserId, @action, @entityType, @entityId, @details)`,
   ),
   createEntry: db.prepare(
-    `INSERT INTO entries (id, guild_id, type, amount, is_donation, date, user_name, notes)
-     VALUES (@id, @guildId, @type, @amount, @isDonation, @date, @user, @notes)`,
+    `INSERT INTO entries (id, guild_id, type, amount, is_donation, is_due, withdrawal_category, date, user_name, notes)
+     VALUES (@id, @guildId, @type, @amount, @isDonation, @isDue, @withdrawalCategory, @date, @user, @notes)`,
   ),
   findEntryForGuild: db.prepare(
-    `SELECT id, guild_id AS guildId, type, amount, is_donation AS isDonation, date, user_name AS user, notes
+    `SELECT id, guild_id AS guildId, type, amount, is_donation AS isDonation, is_due AS isDue, withdrawal_category AS withdrawalCategory, date, user_name AS user, notes
      FROM entries
      WHERE id = ? AND guild_id = ?`,
   ),
@@ -359,6 +368,8 @@ const statements = {
      SET type = @type,
          amount = @amount,
          is_donation = @isDonation,
+         is_due = @isDue,
+         withdrawal_category = @withdrawalCategory,
          date = @date,
          user_name = @user,
          notes = @notes
@@ -788,9 +799,25 @@ function sanitizeEntryPayload(payload) {
   const user = sanitizeText(payload?.user, 80)
   const notes = sanitizeText(payload?.notes, 500)
   const isDonation = type === 'deposit' && Boolean(payload?.isDonation)
+  const isDue = type === 'deposit' && Boolean(payload?.isDue)
+  const rawWithdrawalCategory = payload?.withdrawalCategory
+  const withdrawalCategory =
+    type === 'withdrawal'
+      ? rawWithdrawalCategory == null || rawWithdrawalCategory === ''
+        ? ''
+        : String(rawWithdrawalCategory)
+      : ''
 
   if (!entryTypes.has(type)) {
     throw createHttpError(400, 'Choose a valid entry type before saving.')
+  }
+
+  if (isDonation && isDue) {
+    throw createHttpError(400, 'Choose either Donation or Dues for a deposit, not both.')
+  }
+
+  if (withdrawalCategory && !withdrawalCategories.has(withdrawalCategory)) {
+    throw createHttpError(400, 'Choose a valid withdrawal purpose before saving.')
   }
 
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -801,7 +828,16 @@ function sanitizeEntryPayload(payload) {
     throw createHttpError(400, 'Choose a valid entry date in YYYY-MM-DD format.')
   }
 
-  return { type, amount, isDonation: isDonation ? 1 : 0, date, user, notes }
+  return {
+    type,
+    amount,
+    isDonation: isDonation ? 1 : 0,
+    isDue: isDue ? 1 : 0,
+    withdrawalCategory,
+    date,
+    user,
+    notes,
+  }
 }
 
 function sanitizeGuildName(value) {
@@ -1527,7 +1563,15 @@ app.post('/api/guilds/:guildId/entries', requireAuth, (request, response, next) 
       action: 'entry.create',
       entityType: 'entry',
       entityId: entryId,
-      details: { guildId: guild.id, type: entry.type, isDonation: Boolean(entry.isDonation), amount: entry.amount, date: entry.date },
+      details: {
+        guildId: guild.id,
+        type: entry.type,
+        isDonation: Boolean(entry.isDonation),
+        isDue: Boolean(entry.isDue),
+        withdrawalCategory: entry.withdrawalCategory,
+        amount: entry.amount,
+        date: entry.date,
+      },
     })
 
     scheduleBackup('entry-create')
@@ -1556,7 +1600,15 @@ app.patch('/api/guilds/:guildId/entries/:entryId', requireAuth, (request, respon
       action: 'entry.update',
       entityType: 'entry',
       entityId: request.params.entryId,
-      details: { guildId: guild.id, type: entry.type, isDonation: Boolean(entry.isDonation), amount: entry.amount, date: entry.date },
+      details: {
+        guildId: guild.id,
+        type: entry.type,
+        isDonation: Boolean(entry.isDonation),
+        isDue: Boolean(entry.isDue),
+        withdrawalCategory: entry.withdrawalCategory,
+        amount: entry.amount,
+        date: entry.date,
+      },
     })
 
     scheduleBackup('entry-update')

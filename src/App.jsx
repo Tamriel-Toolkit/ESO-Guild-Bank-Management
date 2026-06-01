@@ -71,7 +71,9 @@ import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
 import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
 import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
+import PieBreakdownChart from './components/PieBreakdownChart'
 import SettingsDialog from './components/SettingsDialog'
+import Graph from './components/Graph'
 import './App.css'
 
 const LEGACY_STORAGE_KEY = 'eso-guild-bank-management-v1'
@@ -84,9 +86,23 @@ const createGuestState = () => ({
   weekStartDate: todayString(),
 })
 
+const withdrawalCategoryOptions = [
+  { value: 'traderBid', label: 'Trader Bid' },
+  { value: 'heraldry', label: 'Heraldry' },
+  { value: 'other', label: 'Other' },
+]
+
+const normalizeWithdrawalCategory = (value) =>
+  withdrawalCategoryOptions.some((option) => option.value === value) ? value : ''
+
+const getWithdrawalCategoryLabel = (value) =>
+  withdrawalCategoryOptions.find((option) => option.value === value)?.label ?? ''
+
 const normalizeEntry = (entry) => ({
   ...entry,
   isDonation: Boolean(entry?.isDonation),
+  isDue: Boolean(entry?.isDue),
+  withdrawalCategory: normalizeWithdrawalCategory(entry?.withdrawalCategory),
   user: entry?.user?.trim?.() ?? '',
   notes: entry?.notes?.trim?.() ?? '',
 })
@@ -146,6 +162,9 @@ const createEntry = (draft) => ({
   type: draft.type,
   amount: Number(draft.amount),
   isDonation: draft.type === 'deposit' ? Boolean(draft.isDonation) : false,
+  isDue: draft.type === 'deposit' ? Boolean(draft.isDue) : false,
+  withdrawalCategory:
+    draft.type === 'withdrawal' ? normalizeWithdrawalCategory(draft.withdrawalCategory) : '',
   date: draft.date,
   user: draft.user.trim(),
   notes: draft.notes.trim(),
@@ -161,6 +180,8 @@ const defaultEntryDraft = {
   type: 'deposit',
   amount: '',
   isDonation: false,
+  isDue: false,
+  withdrawalCategory: '',
   date: todayString(),
   user: '',
   notes: '',
@@ -1393,6 +1414,9 @@ function App() {
                             ...prev,
                             type: event.target.value,
                             isDonation: event.target.value === 'deposit' ? prev.isDonation : false,
+                            isDue: event.target.value === 'deposit' ? prev.isDue : false,
+                            withdrawalCategory:
+                              event.target.value === 'withdrawal' ? prev.withdrawalCategory : '',
                           }))
                         }
                       >
@@ -1439,17 +1463,64 @@ function App() {
                       }
                     />
                     {entryDraft.type === 'deposit' && (
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={entryDraft.isDonation}
-                            onChange={(event) =>
-                              setEntryDraft((prev) => ({ ...prev, isDonation: event.target.checked }))
-                            }
-                          />
-                        }
-                        label="Donation"
-                      />
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={entryDraft.isDonation}
+                              onChange={(event) =>
+                                setEntryDraft((prev) => ({
+                                  ...prev,
+                                  isDonation: event.target.checked,
+                                  isDue: event.target.checked ? false : prev.isDue,
+                                }))
+                              }
+                            />
+                          }
+                          label="Donation"
+                        />
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={entryDraft.isDue}
+                              onChange={(event) =>
+                                setEntryDraft((prev) => ({
+                                  ...prev,
+                                  isDue: event.target.checked,
+                                  isDonation: event.target.checked ? false : prev.isDonation,
+                                }))
+                              }
+                            />
+                          }
+                          label="Dues"
+                        />
+                      </Stack>
+                    )}
+                    {entryDraft.type === 'withdrawal' && (
+                      <Stack spacing={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Withdrawal Purpose
+                        </Typography>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                          {withdrawalCategoryOptions.map((option) => (
+                            <FormControlLabel
+                              key={option.value}
+                              control={
+                                <Checkbox
+                                  checked={entryDraft.withdrawalCategory === option.value}
+                                  onChange={(event) =>
+                                    setEntryDraft((prev) => ({
+                                      ...prev,
+                                      withdrawalCategory: event.target.checked ? option.value : '',
+                                    }))
+                                  }
+                                />
+                              }
+                              label={option.label}
+                            />
+                          ))}
+                        </Stack>
+                      </Stack>
                     )}
                     <Button variant="contained" onClick={saveEntry} disabled={mutationPending}>
                       Save
@@ -1580,6 +1651,25 @@ function App() {
               </CardContent>
             </Card>
 
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Stack spacing={3}>
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      Statistics Graph
+                    </Typography>
+                    <Graph entries={activeEntries} statisticsRange={statisticsRange} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      Entry Breakdown
+                    </Typography>
+                    <PieBreakdownChart entries={activeEntries} statisticsRange={statisticsRange} />
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardContent>
                 <Stack
@@ -1701,6 +1791,16 @@ function App() {
                                 {entry.type === 'deposit' && entry.isDonation && (
                                   <Typography variant="caption" color="text.secondary">
                                     Donation
+                                  </Typography>
+                                )}
+                                {entry.type === 'deposit' && entry.isDue && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Dues
+                                  </Typography>
+                                )}
+                                {entry.type === 'withdrawal' && entry.withdrawalCategory && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {getWithdrawalCategoryLabel(entry.withdrawalCategory)}
                                   </Typography>
                                 )}
                               </Stack>
@@ -1848,6 +1948,9 @@ function App() {
                       ...prev,
                       type: event.target.value,
                       isDonation: event.target.value === 'deposit' ? prev.isDonation : false,
+                      isDue: event.target.value === 'deposit' ? prev.isDue : false,
+                      withdrawalCategory:
+                        event.target.value === 'withdrawal' ? prev.withdrawalCategory : '',
                     }))
                   }
                 >
@@ -1892,17 +1995,64 @@ function App() {
                 minRows={2}
               />
               {editingEntry.type === 'deposit' && (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={Boolean(editingEntry.isDonation)}
-                      onChange={(event) =>
-                        setEditingEntry((prev) => ({ ...prev, isDonation: event.target.checked }))
-                      }
-                    />
-                  }
-                  label="Donation"
-                />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={Boolean(editingEntry.isDonation)}
+                        onChange={(event) =>
+                          setEditingEntry((prev) => ({
+                            ...prev,
+                            isDonation: event.target.checked,
+                            isDue: event.target.checked ? false : prev.isDue,
+                          }))
+                        }
+                      />
+                    }
+                    label="Donation"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={Boolean(editingEntry.isDue)}
+                        onChange={(event) =>
+                          setEditingEntry((prev) => ({
+                            ...prev,
+                            isDue: event.target.checked,
+                            isDonation: event.target.checked ? false : prev.isDonation,
+                          }))
+                        }
+                      />
+                    }
+                    label="Dues"
+                  />
+                </Stack>
+              )}
+              {editingEntry.type === 'withdrawal' && (
+                <Stack spacing={1}>
+                  <Typography variant="body2" color="text.secondary">
+                    Withdrawal Purpose
+                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                    {withdrawalCategoryOptions.map((option) => (
+                      <FormControlLabel
+                        key={option.value}
+                        control={
+                          <Checkbox
+                            checked={editingEntry.withdrawalCategory === option.value}
+                            onChange={(event) =>
+                              setEditingEntry((prev) => ({
+                                ...prev,
+                                withdrawalCategory: event.target.checked ? option.value : '',
+                              }))
+                            }
+                          />
+                        }
+                        label={option.label}
+                      />
+                    ))}
+                  </Stack>
+                </Stack>
               )}
             </Stack>
           )}
