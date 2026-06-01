@@ -253,7 +253,7 @@ const computeTotals = (entries, filter) =>
     { deposit: 0, withdrawal: 0, salesTax: 0 },
   )
 
-const computeTopDepositor = (entries, filter) => {
+const computeTopDonors = (entries, filter) => {
   const depositsByUser = entries.reduce((totals, entry) => {
     if (!filter(entry) || entry.type !== 'deposit' || !entry.isDonation) {
       return totals
@@ -264,15 +264,10 @@ const computeTopDepositor = (entries, filter) => {
     return totals
   }, new Map())
 
-  let topDepositor = null
-
-  for (const [username, total] of depositsByUser.entries()) {
-    if (!topDepositor || total > topDepositor.amount) {
-      topDepositor = { username, amount: total }
-    }
-  }
-
-  return topDepositor
+  return [...depositsByUser.entries()]
+    .sort((leftEntry, rightEntry) => rightEntry[1] - leftEntry[1])
+    .slice(0, 3)
+    .map(([username, amount], index) => ({ rank: index + 1, username, amount }))
 }
 
 const fmtGold = (value) => `${Math.round(value).toLocaleString()}g`
@@ -341,7 +336,7 @@ const buildStatisticsRows = (entries, statisticsRange) => {
     dailyRows.push({
       label: formatDisplayDate(dayIso),
       totals: computeTotals(entries, (entry) => entry.date === dayIso),
-      topDepositor: computeTopDepositor(entries, (entry) => entry.date === dayIso),
+      topDonors: computeTopDonors(entries, (entry) => entry.date === dayIso),
     })
   }
 
@@ -355,7 +350,7 @@ const buildStatisticsRows = (entries, statisticsRange) => {
     weeklyRows.push({
       label: formatDisplayDateRange(weekStartIso, weekEndIso),
       totals: computeTotals(entries, (entry) => entryInRange(entry.date, weekStartIso, weekEndIso)),
-      topDepositor: computeTopDepositor(entries, (entry) => entryInRange(entry.date, weekStartIso, weekEndIso)),
+      topDonors: computeTopDonors(entries, (entry) => entryInRange(entry.date, weekStartIso, weekEndIso)),
     })
   }
 
@@ -369,7 +364,7 @@ const buildStatisticsRows = (entries, statisticsRange) => {
     monthlyRows.push({
       label: formatDisplayDateRange(monthStartIso, monthEndIso),
       totals: computeTotals(entries, (entry) => entryInRange(entry.date, monthStartIso, monthEndIso)),
-      topDepositor: computeTopDepositor(entries, (entry) => entryInRange(entry.date, monthStartIso, monthEndIso)),
+      topDonors: computeTopDonors(entries, (entry) => entryInRange(entry.date, monthStartIso, monthEndIso)),
     })
   }
 
@@ -380,7 +375,7 @@ const buildStatisticsRows = (entries, statisticsRange) => {
     {
       label: formatDisplayDateRange(startDate, endDate),
       totals: computeTotals(entries, (entry) => entry.date >= startDate && entry.date <= endDate),
-      topDepositor: computeTopDepositor(entries, (entry) => entry.date >= startDate && entry.date <= endDate),
+      topDonors: computeTopDonors(entries, (entry) => entry.date >= startDate && entry.date <= endDate),
     },
   ])
 
@@ -1556,11 +1551,17 @@ function App() {
                             <TableCell>
                               <Stack spacing={0.25}>
                                 <Typography variant="body2">{statisticsRow.label}</Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {statisticsRow.topDepositor
-                                    ? `Top depositor: ${statisticsRow.topDepositor.username} (${fmtGold(statisticsRow.topDepositor.amount)})`
-                                    : 'Top depositor: No deposits recorded'}
-                                </Typography>
+                                {statisticsRow.topDonors?.length ? (
+                                  statisticsRow.topDonors.map((donor) => (
+                                    <Typography key={`${statisticsRow.label}-${donor.rank}-${donor.username}`} variant="caption" color="text.secondary">
+                                      {`#${donor.rank} donor: ${donor.username} (${fmtGold(donor.amount)})`}
+                                    </Typography>
+                                  ))
+                                ) : (
+                                  <Typography variant="caption" color="text.secondary">
+                                    Top donors: No donation deposits recorded
+                                  </Typography>
+                                )}
                               </Stack>
                             </TableCell>
                             <TableCell align="right">{fmtGold(statisticsRow.totals.deposit)}</TableCell>
