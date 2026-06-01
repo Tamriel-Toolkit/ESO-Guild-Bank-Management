@@ -1591,7 +1591,8 @@ if (isProduction) {
   }
 }
 
-app.use((error, _request, response, _next) => {
+app.use((error, _request, response, next) => {
+  void next
   const status = error.status || 500
   const message = status >= 500 ? 'Internal server error.' : error.message
   response.status(status).json({ error: message })

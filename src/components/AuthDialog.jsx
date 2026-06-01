@@ -6,6 +6,7 @@ function AuthDialog({
   authMode,
   setAuthMode,
   authError,
+  setAuthError,
   authDraft,
   setAuthDraft,
   authSubmitting,

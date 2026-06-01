@@ -477,7 +477,7 @@ function App() {
     setRecoveryEmailDraft({ email: currentUser?.email ?? '', password: '' })
     setRecoveryEmailError('')
     setRecoveryEmailNotice('')
-  }, [settingsOpen])
+  }, [currentUser?.email, settingsOpen])
 
   useEffect(() => {
     if (!guildAccessGuildId) {
@@ -1691,6 +1691,7 @@ function App() {
         authMode={authMode}
         setAuthMode={setAuthMode}
         authError={authError}
+        setAuthError={setAuthError}
         authDraft={authDraft}
         setAuthDraft={setAuthDraft}
         authSubmitting={authSubmitting}
