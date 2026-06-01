@@ -93,6 +93,29 @@ export const logIn = (credentials) =>
     body: credentials,
   })
 
+export const verifyEmailToken = (token) =>
+  apiRequest('/api/auth/email-verification/verify', {
+    method: 'POST',
+    body: { token },
+  })
+
+export const resendVerificationEmail = () =>
+  apiRequest('/api/auth/email-verification/resend', {
+    method: 'POST',
+  })
+
+export const requestPasswordReset = (email) =>
+  apiRequest('/api/auth/password-reset/request', {
+    method: 'POST',
+    body: { email },
+  })
+
+export const confirmPasswordReset = (token, password) =>
+  apiRequest('/api/auth/password-reset/confirm', {
+    method: 'POST',
+    body: { token, password },
+  })
+
 export const logOut = () =>
   apiRequest('/api/auth/logout', {
     method: 'POST',
@@ -101,6 +124,12 @@ export const logOut = () =>
 export const deleteAccount = (payload) =>
   apiRequest('/api/account', {
     method: 'DELETE',
+    body: payload,
+  })
+
+export const updateRecoveryEmail = (payload) =>
+  apiRequest('/api/account/email', {
+    method: 'PATCH',
     body: payload,
   })
 

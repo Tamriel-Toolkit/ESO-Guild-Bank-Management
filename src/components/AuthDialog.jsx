@@ -10,6 +10,7 @@ function AuthDialog({
   setAuthDraft,
   authSubmitting,
   handleAuth,
+  openPasswordResetRequest,
 }) {
   return (
     <Dialog open={authOpen} onClose={() => setAuthOpen(false)}>
@@ -25,6 +26,18 @@ function AuthDialog({
             }
             fullWidth
           />
+          {authMode === 'signup' && (
+            <TextField
+              label="Recovery email"
+              type="email"
+              value={authDraft.email}
+              onChange={(event) =>
+                setAuthDraft((prev) => ({ ...prev, email: event.target.value }))
+              }
+              helperText="Used for verification and password resets."
+              fullWidth
+            />
+          )}
           <TextField
             label="Password"
             type="password"
@@ -38,14 +51,19 @@ function AuthDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-        <Button
-          onClick={() => {
-            setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'))
-            setAuthError('')
-          }}
-        >
-          {authMode === 'login' ? 'Need an account?' : 'Have an account?'}
-        </Button>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Button
+            onClick={() => {
+              setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'))
+              setAuthError('')
+            }}
+          >
+            {authMode === 'login' ? 'Need an account?' : 'Have an account?'}
+          </Button>
+          {authMode === 'login' && (
+            <Button onClick={openPasswordResetRequest}>Forgot password?</Button>
+          )}
+        </Stack>
         <Button variant="contained" onClick={handleAuth} disabled={authSubmitting}>
           {authMode === 'login' ? 'Log in' : 'Create account'}
         </Button>

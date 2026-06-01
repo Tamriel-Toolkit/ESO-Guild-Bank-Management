@@ -10,6 +10,7 @@ ESO Guild Gold Ledger is a live web app for tracking Elder Scrolls Online guild 
 ## Highlights
 
 - Secure sign up and login backed by a Node and Express API
+- Verified recovery email and password reset flow
 - Server-side SQLite persistence instead of browser-only storage
 - HTTP-only cookie sessions and hashed passwords with Node `crypto.scrypt`
 - Guest mode for temporary drafting before account creation or login
@@ -65,7 +66,8 @@ Typical production flow:
 3. Set `NODE_ENV=production`
 4. Set `DATABASE_FILE` to a persistent disk path
 5. Set `PUBLIC_APP_URL` to your live canonical URL
-6. Run `npm start`
+6. Configure SMTP delivery for verification and password reset emails
+7. Run `npm start`
 
 For Render-style deployments with SQLite persistence, use a mounted disk path such as `/var/data/guild-bank.db`.
 
@@ -78,15 +80,27 @@ Recommended Render health check path:
 - `PORT`: API and production web server port. Default: `3001`
 - `DATABASE_FILE`: SQLite database path. Use a persistent disk path in production.
 - `PUBLIC_APP_URL`: canonical public site URL. Default: `https://www.esoguildgoldledger.com`
+- `SMTP_HOST`: SMTP host used for verification and password reset emails
+- `SMTP_PORT`: SMTP port. Default: `587`
+- `SMTP_SECURE`: set to `true` for implicit TLS SMTP transports such as port `465`
+- `SMTP_USER`: SMTP username
+- `SMTP_PASS`: SMTP password
+- `SMTP_FROM_EMAIL`: sender email address shown on verification and reset messages
+- `SMTP_FROM_NAME`: optional sender name. Default: `ESO Guild Gold Ledger`
+- `EMAIL_VERIFICATION_TOKEN_TTL_HOURS`: verification link lifetime in hours. Default: `24`
+- `PASSWORD_RESET_TOKEN_TTL_MINUTES`: password reset link lifetime in minutes. Default: `60`
 - `SESSION_COOKIE_NAME`: optional session cookie name override
 - `SESSION_TTL_DAYS`: session lifetime in days. Default: `14`
+
+For local testing without a real SMTP provider, you can set `MAIL_CAPTURE_DIRECTORY` to write outgoing email payloads to disk instead of sending them.
 
 ## Post-Deploy Checklist
 
 1. Confirm the Render health check path is set to `/healthz`
 2. Set `PUBLIC_APP_URL` to `https://www.esoguildgoldledger.com`
-3. Submit `https://www.esoguildgoldledger.com/` and `https://www.esoguildgoldledger.com/sitemap.xml` in Google Search Console
-4. Smoke-test sign up, login, guild creation, and shared-guild invite flows on the live domain
+3. Configure SMTP environment variables before opening public signups
+4. Submit `https://www.esoguildgoldledger.com/` and `https://www.esoguildgoldledger.com/sitemap.xml` in Google Search Console
+5. Smoke-test sign up, email verification, password reset, guild creation, and shared-guild invite flows on the live domain
 
 ## Validation
 

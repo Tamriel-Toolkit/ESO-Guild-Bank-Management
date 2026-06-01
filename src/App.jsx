@@ -40,6 +40,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import {
+  confirmPasswordReset,
   createEntryForGuild,
   createGuildInvite,
   createGuild,
@@ -51,17 +52,23 @@ import {
   leaveGuild as leaveGuildRequest,
   logIn,
   logOut,
+  requestPasswordReset,
+  resendVerificationEmail,
   redeemGuildInvite,
   removeGuildMember as removeGuildMemberRequest,
   renameGuild,
   selectGuild,
   signUp,
+  updateRecoveryEmail,
   updateEntryInGuild,
+  verifyEmailToken,
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
+import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
+import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
 import SettingsDialog from './components/SettingsDialog'
 import './App.css'
 
@@ -371,11 +378,14 @@ function App() {
   const [entryDraft, setEntryDraft] = useState(defaultEntryDraft)
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState('login')
-  const [authDraft, setAuthDraft] = useState({ username: '', password: '' })
+  const [authDraft, setAuthDraft] = useState({ username: '', email: '', password: '' })
   const [authError, setAuthError] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsInviteCode, setSettingsInviteCode] = useState('')
   const [settingsInviteError, setSettingsInviteError] = useState('')
+  const [recoveryEmailDraft, setRecoveryEmailDraft] = useState({ email: '', password: '' })
+  const [recoveryEmailError, setRecoveryEmailError] = useState('')
+  const [recoveryEmailNotice, setRecoveryEmailNotice] = useState('')
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
   const [deleteAccountDraft, setDeleteAccountDraft] = useState({ password: '' })
   const [deleteAccountError, setDeleteAccountError] = useState('')
@@ -395,6 +405,14 @@ function App() {
   const [collapsedStatisticsSections, setCollapsedStatisticsSections] = useState(
     createCollapsedStatisticsSections,
   )
+  const [passwordResetRequestOpen, setPasswordResetRequestOpen] = useState(false)
+  const [passwordResetRequestEmail, setPasswordResetRequestEmail] = useState('')
+  const [passwordResetRequestError, setPasswordResetRequestError] = useState('')
+  const [passwordResetRequestNotice, setPasswordResetRequestNotice] = useState('')
+  const [passwordResetConfirmOpen, setPasswordResetConfirmOpen] = useState(false)
+  const [passwordResetToken, setPasswordResetToken] = useState('')
+  const [passwordResetDraft, setPasswordResetDraft] = useState({ password: '', confirmPassword: '' })
+  const [passwordResetError, setPasswordResetError] = useState('')
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [mutationPending, setMutationPending] = useState(false)
   const [guildDrawerOpen, setGuildDrawerOpen] = useState(false)
@@ -452,6 +470,16 @@ function App() {
   }, [sessionUser, selectedGuild?.id])
 
   useEffect(() => {
+    if (!settingsOpen) {
+      return
+    }
+
+    setRecoveryEmailDraft({ email: currentUser?.email ?? '', password: '' })
+    setRecoveryEmailError('')
+    setRecoveryEmailNotice('')
+  }, [settingsOpen])
+
+  useEffect(() => {
     if (!guildAccessGuildId) {
       return
     }
@@ -483,6 +511,52 @@ function App() {
       window.clearInterval(intervalId)
     }
   }, [guildAccessGuild?.id, guildAccessGuild?.isOwner, sessionUser])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const verifyToken = params.get('verify-email')
+    const resetToken = params.get('reset-password')
+
+    if (!verifyToken && !resetToken) {
+      return
+    }
+
+    if (verifyToken) {
+      params.delete('verify-email')
+    }
+    if (resetToken) {
+      params.delete('reset-password')
+    }
+
+    const nextSearch = params.toString()
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
+    window.history.replaceState({}, '', nextUrl)
+
+    if (resetToken) {
+      setPasswordResetToken(resetToken)
+      setPasswordResetDraft({ password: '', confirmPassword: '' })
+      setPasswordResetError('')
+      setPasswordResetConfirmOpen(true)
+      setAuthOpen(false)
+    }
+
+    if (verifyToken) {
+      ;(async () => {
+        try {
+          const response = await verifyEmailToken(verifyToken)
+          const sessionResponse = await getSession().catch(() => null)
+          if (sessionResponse?.user) {
+            setServerUser(sessionResponse.user)
+          }
+          setGlobalError('')
+          setGlobalNotice(response.message)
+        } catch (error) {
+          setGlobalNotice('')
+          setGlobalError(error.message)
+        }
+      })()
+    }
+  }, [])
 
   const statisticsRows = buildStatisticsRows(activeEntries, statisticsRange)
   const sortedEntries = [...activeEntries].sort((leftEntry, rightEntry) => {
@@ -546,6 +620,30 @@ function App() {
     setSettingsOpen(false)
     setSettingsInviteCode('')
     setSettingsInviteError('')
+    setRecoveryEmailError('')
+    setRecoveryEmailNotice('')
+  }
+
+  const closePasswordResetRequest = (force = false) => {
+    if (mutationPending && !force) {
+      return
+    }
+
+    setPasswordResetRequestOpen(false)
+    setPasswordResetRequestEmail(currentUser?.email ?? '')
+    setPasswordResetRequestError('')
+    setPasswordResetRequestNotice('')
+  }
+
+  const closePasswordResetConfirm = (force = false) => {
+    if (mutationPending && !force) {
+      return
+    }
+
+    setPasswordResetConfirmOpen(false)
+    setPasswordResetToken('')
+    setPasswordResetDraft({ password: '', confirmPassword: '' })
+    setPasswordResetError('')
   }
 
   const closeGuildAccess = (force = false) => {
@@ -692,10 +790,15 @@ function App() {
 
   const handleAuth = async () => {
     const username = authDraft.username.trim().toLowerCase()
+    const email = authDraft.email.trim().toLowerCase()
     const password = authDraft.password
 
-    if (!username || !password) {
-      setAuthError('Enter both a username and password.')
+    if (!username || !password || (authMode === 'signup' && !email)) {
+      setAuthError(
+        authMode === 'signup'
+          ? 'Enter a username, recovery email, and password.'
+          : 'Enter both a username and password.',
+      )
       return
     }
 
@@ -705,7 +808,7 @@ function App() {
 
     try {
       const response = authMode === 'signup'
-        ? await signUp({ username, password })
+        ? await signUp({ username, email, password })
         : await logIn({ username, password })
       let nextUser = response.user
 
@@ -716,11 +819,11 @@ function App() {
         user: nextUser.username,
       }))
       setAuthOpen(false)
-      setAuthDraft({ username: '', password: '' })
+      setAuthDraft({ username: '', email: '', password: '' })
       setGlobalNotice(
-        authMode === 'signup'
+        response.notice || (authMode === 'signup'
           ? 'Account created. Your data is now stored on the server.'
-          : 'Logged in successfully.',
+          : 'Logged in successfully.'),
       )
     } catch (error) {
       setAuthError(error.message)
@@ -778,6 +881,106 @@ function App() {
   const handleOpenDeleteAccountFromSettings = () => {
     setSettingsOpen(false)
     setDeleteAccountOpen(true)
+  }
+
+  const openPasswordResetRequest = () => {
+    setAuthOpen(false)
+    setPasswordResetRequestOpen(true)
+    setPasswordResetRequestEmail(currentUser?.email ?? '')
+    setPasswordResetRequestError('')
+    setPasswordResetRequestNotice('')
+  }
+
+  const handleRequestPasswordReset = async () => {
+    if (!passwordResetRequestEmail.trim()) {
+      setPasswordResetRequestError('Enter your recovery email address.')
+      return
+    }
+
+    clearMessages()
+    setPasswordResetRequestError('')
+    setPasswordResetRequestNotice('')
+    setMutationPending(true)
+
+    try {
+      const response = await requestPasswordReset(passwordResetRequestEmail.trim().toLowerCase())
+      setPasswordResetRequestNotice(response.message)
+    } catch (error) {
+      setPasswordResetRequestError(error.message)
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const handleConfirmPasswordReset = async () => {
+    if (!passwordResetDraft.password || !passwordResetDraft.confirmPassword) {
+      setPasswordResetError('Enter and confirm your new password.')
+      return
+    }
+
+    if (passwordResetDraft.password !== passwordResetDraft.confirmPassword) {
+      setPasswordResetError('The new passwords do not match.')
+      return
+    }
+
+    clearMessages()
+    setPasswordResetError('')
+    setMutationPending(true)
+
+    try {
+      const response = await confirmPasswordReset(passwordResetToken, passwordResetDraft.password)
+      closePasswordResetConfirm(true)
+      setAuthOpen(true)
+      setAuthMode('login')
+      setGlobalNotice(response.message)
+    } catch (error) {
+      setPasswordResetError(error.message)
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const handleResendVerificationEmail = async () => {
+    clearMessages()
+    setRecoveryEmailError('')
+    setRecoveryEmailNotice('')
+    setMutationPending(true)
+
+    try {
+      const response = await resendVerificationEmail()
+      setRecoveryEmailNotice(response.message)
+    } catch (error) {
+      setRecoveryEmailError(error.message)
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const handleUpdateRecoveryEmail = async () => {
+    if (!recoveryEmailDraft.email.trim() || !recoveryEmailDraft.password) {
+      setRecoveryEmailError('Enter your recovery email and current password.')
+      return
+    }
+
+    clearMessages()
+    setRecoveryEmailError('')
+    setRecoveryEmailNotice('')
+    setMutationPending(true)
+
+    try {
+      const response = await updateRecoveryEmail({
+        email: recoveryEmailDraft.email.trim().toLowerCase(),
+        password: recoveryEmailDraft.password,
+      })
+      setServerUser(response.user)
+      setRecoveryEmailDraft((prev) => ({ ...prev, password: '' }))
+      setRecoveryEmailNotice(response.message)
+      setGlobalNotice(response.message)
+    } catch (error) {
+      setRecoveryEmailError(error.message)
+    } finally {
+      setMutationPending(false)
+    }
   }
 
   const handleOpenGuildAccess = (guildId) => {
@@ -1113,6 +1316,30 @@ function App() {
               {legacyState && !sessionUser && !sessionLoading && (
                 <Alert severity="info">
                   Legacy browser data was detected. Sign in to import it into the secure server.
+                </Alert>
+              )}
+              {sessionUser && !sessionLoading && !currentUser?.email && (
+                <Alert
+                  severity="warning"
+                  action={
+                    <Button color="inherit" size="small" onClick={() => setSettingsOpen(true)}>
+                      Add email
+                    </Button>
+                  }
+                >
+                  Add a verified recovery email in settings so password resets are possible.
+                </Alert>
+              )}
+              {sessionUser && !sessionLoading && currentUser?.email && !currentUser.emailVerified && (
+                <Alert
+                  severity="info"
+                  action={
+                    <Button color="inherit" size="small" onClick={handleResendVerificationEmail}>
+                      Resend verification
+                    </Button>
+                  }
+                >
+                  Verify {currentUser.email} to finish enabling password recovery.
                 </Alert>
               )}
               {!sessionUser && !sessionLoading && (
@@ -1464,9 +1691,11 @@ function App() {
         setAuthDraft={setAuthDraft}
         authSubmitting={authSubmitting}
         handleAuth={handleAuth}
+        openPasswordResetRequest={openPasswordResetRequest}
       />
 
       <SettingsDialog
+        currentUser={currentUser}
         settingsOpen={settingsOpen}
         closeSettings={closeSettings}
         mutationPending={mutationPending}
@@ -1474,7 +1703,34 @@ function App() {
         settingsInviteCode={settingsInviteCode}
         setSettingsInviteCode={setSettingsInviteCode}
         handleRedeemInviteCode={handleRedeemInviteCode}
+        recoveryEmailDraft={recoveryEmailDraft}
+        setRecoveryEmailDraft={setRecoveryEmailDraft}
+        recoveryEmailError={recoveryEmailError}
+        recoveryEmailNotice={recoveryEmailNotice}
+        handleUpdateRecoveryEmail={handleUpdateRecoveryEmail}
+        handleResendVerificationEmail={handleResendVerificationEmail}
         handleOpenDeleteAccountFromSettings={handleOpenDeleteAccountFromSettings}
+      />
+
+      <PasswordResetRequestDialog
+        open={passwordResetRequestOpen}
+        onClose={closePasswordResetRequest}
+        passwordResetRequestEmail={passwordResetRequestEmail}
+        setPasswordResetRequestEmail={setPasswordResetRequestEmail}
+        passwordResetRequestError={passwordResetRequestError}
+        passwordResetRequestNotice={passwordResetRequestNotice}
+        mutationPending={mutationPending}
+        handleRequestPasswordReset={handleRequestPasswordReset}
+      />
+
+      <PasswordResetConfirmDialog
+        open={passwordResetConfirmOpen}
+        onClose={closePasswordResetConfirm}
+        passwordResetDraft={passwordResetDraft}
+        setPasswordResetDraft={setPasswordResetDraft}
+        passwordResetError={passwordResetError}
+        mutationPending={mutationPending}
+        handleConfirmPasswordReset={handleConfirmPasswordReset}
       />
 
       <DeleteAccountDialog

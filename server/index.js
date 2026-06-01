@@ -4,6 +4,7 @@ import Database from 'better-sqlite3'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import helmet from 'helmet'
+import nodemailer from 'nodemailer'
 import path from 'node:path'
 import process from 'node:process'
 import express from 'express'
@@ -23,15 +24,33 @@ const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'eso_guild_bank_ses
 const publicAppUrl = String(process.env.PUBLIC_APP_URL || 'https://www.esoguildgoldledger.com').replace(/\/$/, '')
 const sessionTtlDays = Number(process.env.SESSION_TTL_DAYS) || 14
 const sessionTtlMs = sessionTtlDays * 24 * 60 * 60 * 1000
+const emailVerificationTokenTtlMs = (Number(process.env.EMAIL_VERIFICATION_TOKEN_TTL_HOURS) || 24) * 60 * 60 * 1000
+const passwordResetTokenTtlMs = (Number(process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES) || 60) * 60 * 1000
 const apiRateLimitMax = Number(process.env.API_RATE_LIMIT) || 300
 const authRateLimitMax = Number(process.env.AUTH_RATE_LIMIT) || 10
 const backupRetentionCount = Number(process.env.BACKUP_RETENTION_COUNT) || 20
 const backupMinIntervalMs = Number(process.env.BACKUP_MIN_INTERVAL_MS) || 5 * 60 * 1000
 const isProduction = process.env.NODE_ENV === 'production'
 const entryTypes = new Set(['deposit', 'withdrawal', 'salesTax'])
+const smtpHost = process.env.SMTP_HOST || ''
+const smtpPort = Number(process.env.SMTP_PORT) || 587
+const smtpSecure =
+  typeof process.env.SMTP_SECURE === 'string'
+    ? process.env.SMTP_SECURE === 'true'
+    : smtpPort === 465
+const smtpUser = process.env.SMTP_USER || ''
+const smtpPass = process.env.SMTP_PASS || ''
+const smtpFromEmail = process.env.SMTP_FROM_EMAIL || ''
+const smtpFromName = process.env.SMTP_FROM_NAME || 'ESO Guild Gold Ledger'
+const mailCaptureDirectory = process.env.MAIL_CAPTURE_DIRECTORY
+  ? path.resolve(projectRoot, process.env.MAIL_CAPTURE_DIRECTORY)
+  : ''
 
 fs.mkdirSync(path.dirname(dbPath), { recursive: true })
 fs.mkdirSync(backupsDirectory, { recursive: true })
+if (mailCaptureDirectory) {
+  fs.mkdirSync(mailCaptureDirectory, { recursive: true })
+}
 
 const db = new Database(dbPath)
 db.pragma('foreign_keys = ON')
@@ -41,6 +60,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL UNIQUE,
+    email TEXT,
+    email_verified_at TEXT,
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,
     selected_guild_id TEXT,
@@ -109,12 +130,35 @@ db.exec(`
     FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS email_verification_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    used_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_guilds_user_id ON guilds (user_id);
   CREATE INDEX IF NOT EXISTS idx_entries_guild_id ON entries (guild_id);
   CREATE INDEX IF NOT EXISTS idx_guild_members_user_id ON guild_members (user_id);
   CREATE INDEX IF NOT EXISTS idx_guild_invites_guild_id ON guild_invites (guild_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
+  CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens (user_id);
+  CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id);
 `)
 
 db.prepare(
@@ -123,23 +167,36 @@ db.prepare(
 ).run()
 
 const guildInviteColumns = db.prepare('PRAGMA table_info(guild_invites)').all()
+const userColumns = db.prepare('PRAGMA table_info(users)').all()
 if (!guildInviteColumns.some((column) => column.name === 'single_use')) {
   db.exec('ALTER TABLE guild_invites ADD COLUMN single_use INTEGER NOT NULL DEFAULT 1')
 }
 if (!guildInviteColumns.some((column) => column.name === 'expires_at')) {
   db.exec('ALTER TABLE guild_invites ADD COLUMN expires_at TEXT')
 }
+if (!userColumns.some((column) => column.name === 'email')) {
+  db.exec('ALTER TABLE users ADD COLUMN email TEXT')
+}
+if (!userColumns.some((column) => column.name === 'email_verified_at')) {
+  db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT')
+}
 
 db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(new Date().toISOString())
+db.prepare('DELETE FROM email_verification_tokens WHERE expires_at <= ?').run(new Date().toISOString())
+db.prepare('DELETE FROM password_reset_tokens WHERE expires_at <= ?').run(new Date().toISOString())
 
 const statements = {
   createUser: db.prepare(
-    `INSERT INTO users (username, password_hash, password_salt, selected_guild_id)
-     VALUES (@username, @passwordHash, @passwordSalt, NULL)`,
+    `INSERT INTO users (username, email, email_verified_at, password_hash, password_salt, selected_guild_id)
+     VALUES (@username, @email, NULL, @passwordHash, @passwordSalt, NULL)`,
   ),
   findUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
+  findUserByEmail: db.prepare('SELECT * FROM users WHERE email = ?'),
   findUserById: db.prepare('SELECT * FROM users WHERE id = ?'),
   deleteUserById: db.prepare('DELETE FROM users WHERE id = ?'),
+  updateUserEmail: db.prepare('UPDATE users SET email = ?, email_verified_at = NULL WHERE id = ?'),
+  markUserEmailVerified: db.prepare('UPDATE users SET email_verified_at = ? WHERE id = ?'),
+  updateUserPassword: db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?'),
   updateUserSelectedGuild: db.prepare('UPDATE users SET selected_guild_id = ? WHERE id = ?'),
   createSession: db.prepare(
     `INSERT INTO sessions (user_id, token_hash, expires_at)
@@ -152,7 +209,46 @@ const statements = {
      WHERE sessions.token_hash = ? AND sessions.expires_at > ?`,
   ),
   deleteSessionByTokenHash: db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
+  deleteSessionsByUserId: db.prepare('DELETE FROM sessions WHERE user_id = ?'),
   deleteExpiredSessions: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
+  createEmailVerificationToken: db.prepare(
+    `INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+     VALUES (@userId, @tokenHash, @expiresAt)`,
+  ),
+  findEmailVerificationTokenByHash: db.prepare(
+    `SELECT email_verification_tokens.id,
+            email_verification_tokens.user_id AS userId,
+            users.email,
+            users.username
+     FROM email_verification_tokens
+     JOIN users ON users.id = email_verification_tokens.user_id
+     WHERE email_verification_tokens.token_hash = ?
+       AND email_verification_tokens.used_at IS NULL
+       AND email_verification_tokens.expires_at > ?`,
+  ),
+  consumeEmailVerificationToken: db.prepare(
+    'UPDATE email_verification_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL',
+  ),
+  deleteEmailVerificationTokensForUser: db.prepare('DELETE FROM email_verification_tokens WHERE user_id = ?'),
+  createPasswordResetToken: db.prepare(
+    `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+     VALUES (@userId, @tokenHash, @expiresAt)`,
+  ),
+  findPasswordResetTokenByHash: db.prepare(
+    `SELECT password_reset_tokens.id,
+            password_reset_tokens.user_id AS userId,
+            users.email,
+            users.username
+     FROM password_reset_tokens
+     JOIN users ON users.id = password_reset_tokens.user_id
+     WHERE password_reset_tokens.token_hash = ?
+       AND password_reset_tokens.used_at IS NULL
+       AND password_reset_tokens.expires_at > ?`,
+  ),
+  consumePasswordResetToken: db.prepare(
+    'UPDATE password_reset_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL',
+  ),
+  deletePasswordResetTokensForUser: db.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?'),
   listGuildsForUser: db.prepare(
     `SELECT guilds.id,
             guilds.name,
@@ -515,6 +611,151 @@ function hashSessionToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex')
 }
 
+function createOneTimeToken() {
+  return crypto.randomBytes(32).toString('hex')
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function validateEmail(email) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ''))) {
+    throw createHttpError(400, 'Enter a valid recovery email address.')
+  }
+}
+
+function getMailFromAddress() {
+  return smtpFromEmail ? `${smtpFromName} <${smtpFromEmail}>` : ''
+}
+
+function canDeliverTransactionalEmail() {
+  return Boolean(mailCaptureDirectory || (smtpHost && smtpPort && smtpFromEmail))
+}
+
+function ensureTransactionalEmailAvailable() {
+  if (!canDeliverTransactionalEmail()) {
+    throw createHttpError(503, 'Account email is not configured right now. Please try again later.')
+  }
+}
+
+let mailTransport = null
+
+function getMailTransport() {
+  if (!mailTransport) {
+    mailTransport = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: smtpUser || smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
+    })
+  }
+
+  return mailTransport
+}
+
+async function deliverTransactionalEmail({ to, subject, text, html, category }) {
+  if (mailCaptureDirectory) {
+    const safeCategory = String(category || 'message').replace(/[^a-z0-9-]+/gi, '-').toLowerCase()
+    const filePath = path.join(
+      mailCaptureDirectory,
+      `${Date.now()}-${process.pid}-${safeCategory}.json`,
+    )
+    await fs.promises.writeFile(
+      filePath,
+      JSON.stringify({ to, subject, text, html, category }, null, 2),
+      'utf8',
+    )
+    return
+  }
+
+  if (!canDeliverTransactionalEmail()) {
+    throw createHttpError(503, 'Account email is not configured right now. Please try again later.')
+  }
+
+  await getMailTransport().sendMail({
+    from: getMailFromAddress(),
+    to,
+    subject,
+    text,
+    html,
+  })
+}
+
+async function issueEmailVerification(user, reason = 'auth.email_verification_sent') {
+  const token = createOneTimeToken()
+  const expiresAt = new Date(Date.now() + emailVerificationTokenTtlMs).toISOString()
+
+  statements.deleteEmailVerificationTokensForUser.run(user.id)
+  statements.createEmailVerificationToken.run({
+    userId: user.id,
+    tokenHash: hashSessionToken(token),
+    expiresAt,
+  })
+
+  const verificationUrl = `${publicAppUrl}/?verify-email=${encodeURIComponent(token)}`
+  await deliverTransactionalEmail({
+    to: user.email,
+    category: 'verify-email',
+    subject: 'Verify your recovery email for ESO Guild Gold Ledger',
+    text: [
+      `Hi ${user.username},`,
+      '',
+      'Verify this email address to enable password recovery for your ESO Guild Gold Ledger account.',
+      '',
+      verificationUrl,
+      '',
+      'If you did not request this, you can ignore this message.',
+    ].join('\n'),
+    html: `<p>Hi ${user.username},</p><p>Verify this email address to enable password recovery for your ESO Guild Gold Ledger account.</p><p><a href="${verificationUrl}">Verify recovery email</a></p><p>If you did not request this, you can ignore this message.</p>`,
+  })
+
+  writeAuditLog({
+    actorUserId: user.id,
+    action: reason,
+    entityType: 'user',
+    entityId: user.id,
+    details: { email: user.email },
+  })
+}
+
+async function issuePasswordReset(user) {
+  const token = createOneTimeToken()
+  const expiresAt = new Date(Date.now() + passwordResetTokenTtlMs).toISOString()
+
+  statements.deletePasswordResetTokensForUser.run(user.id)
+  statements.createPasswordResetToken.run({
+    userId: user.id,
+    tokenHash: hashSessionToken(token),
+    expiresAt,
+  })
+
+  const resetUrl = `${publicAppUrl}/?reset-password=${encodeURIComponent(token)}`
+  await deliverTransactionalEmail({
+    to: user.email,
+    category: 'password-reset',
+    subject: 'Reset your ESO Guild Gold Ledger password',
+    text: [
+      `Hi ${user.username},`,
+      '',
+      'Use the link below to reset your ESO Guild Gold Ledger password.',
+      '',
+      resetUrl,
+      '',
+      'If you did not request this, you can ignore this message.',
+    ].join('\n'),
+    html: `<p>Hi ${user.username},</p><p>Use the link below to reset your ESO Guild Gold Ledger password.</p><p><a href="${resetUrl}">Reset password</a></p><p>If you did not request this, you can ignore this message.</p>`,
+  })
+
+  writeAuditLog({
+    actorUserId: user.id,
+    action: 'auth.password_reset_requested',
+    entityType: 'user',
+    entityId: user.id,
+    details: { email: user.email },
+  })
+}
+
 function setSessionCookie(response, token, expiresAt) {
   response.cookie(sessionCookieName, token, {
     httpOnly: true,
@@ -647,6 +888,8 @@ function serializeUser(userId) {
 
   return {
     username: user.username,
+    email: user.email ?? '',
+    emailVerified: Boolean(user.email_verified_at),
     selectedGuildId,
     guilds,
   }
@@ -699,21 +942,28 @@ app.get('/api/session', (request, response) => {
   response.json({ user: serializeUser(user.id) })
 })
 
-app.post('/api/auth/signup', (request, response, next) => {
+app.post('/api/auth/signup', async (request, response, next) => {
   try {
     const username = normalizeUsername(request.body?.username)
+    const email = normalizeEmail(request.body?.email)
     const password = request.body?.password
 
     validateUsername(username)
+    validateEmail(email)
     validatePassword(password)
+    ensureTransactionalEmailAvailable()
 
     if (statements.findUserByUsername.get(username)) {
       throw createHttpError(409, 'That username is already in use. Choose a different username or log in instead.')
+    }
+    if (statements.findUserByEmail.get(email)) {
+      throw createHttpError(409, 'That recovery email is already attached to another account. Use a different email or recover that account instead.')
     }
 
     const { passwordHash, passwordSalt } = hashPassword(password)
     const result = statements.createUser.run({
       username,
+      email,
       passwordHash,
       passwordSalt,
     })
@@ -725,9 +975,14 @@ app.post('/api/auth/signup', (request, response, next) => {
       details: { username },
     })
 
+    const createdUser = statements.findUserById.get(result.lastInsertRowid)
+    await issueEmailVerification(createdUser)
     createSession(response, result.lastInsertRowid)
     scheduleBackup('auth-signup')
-    response.status(201).json({ user: serializeUser(result.lastInsertRowid) })
+    response.status(201).json({
+      user: serializeUser(result.lastInsertRowid),
+      notice: 'Account created. Check your email to verify your recovery address.',
+    })
   } catch (error) {
     next(error)
   }
@@ -761,6 +1016,167 @@ app.post('/api/auth/logout', (request, response) => {
 
   clearSessionCookie(response)
   response.status(204).end()
+})
+
+app.post('/api/auth/email-verification/verify', async (request, response, next) => {
+  try {
+    const token = String(request.body?.token || '').trim()
+    if (!token) {
+      throw createHttpError(400, 'This email verification link is invalid or expired.')
+    }
+
+    const verificationRecord = statements.findEmailVerificationTokenByHash.get(
+      hashSessionToken(token),
+      new Date().toISOString(),
+    )
+    if (!verificationRecord) {
+      throw createHttpError(400, 'This email verification link is invalid or expired.')
+    }
+
+    const now = new Date().toISOString()
+    const transaction = db.transaction(() => {
+      statements.consumeEmailVerificationToken.run(now, verificationRecord.id)
+      statements.markUserEmailVerified.run(now, verificationRecord.userId)
+      writeAuditLog({
+        actorUserId: verificationRecord.userId,
+        action: 'auth.email_verified',
+        entityType: 'user',
+        entityId: verificationRecord.userId,
+        details: { email: verificationRecord.email },
+      })
+    })
+
+    transaction()
+    scheduleBackup('auth-email-verified')
+    response.json({ message: 'Recovery email verified. You can now reset your password if needed.' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/auth/password-reset/request', async (request, response, next) => {
+  try {
+    const email = normalizeEmail(request.body?.email)
+    validateEmail(email)
+    ensureTransactionalEmailAvailable()
+
+    const user = statements.findUserByEmail.get(email)
+    if (user?.email_verified_at) {
+      await issuePasswordReset(user)
+    }
+
+    response.json({
+      message: 'If that recovery email is attached to an account, a password reset link has been sent.',
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/auth/password-reset/confirm', (request, response, next) => {
+  try {
+    const token = String(request.body?.token || '').trim()
+    const password = request.body?.password
+
+    if (!token) {
+      throw createHttpError(400, 'This password reset link is invalid or expired.')
+    }
+    validatePassword(password)
+
+    const resetRecord = statements.findPasswordResetTokenByHash.get(
+      hashSessionToken(token),
+      new Date().toISOString(),
+    )
+    if (!resetRecord) {
+      throw createHttpError(400, 'This password reset link is invalid or expired.')
+    }
+
+    const { passwordHash, passwordSalt } = hashPassword(password)
+    const now = new Date().toISOString()
+
+    const transaction = db.transaction(() => {
+      statements.updateUserPassword.run(passwordHash, passwordSalt, resetRecord.userId)
+      statements.consumePasswordResetToken.run(now, resetRecord.id)
+      statements.deletePasswordResetTokensForUser.run(resetRecord.userId)
+      statements.deleteSessionsByUserId.run(resetRecord.userId)
+      writeAuditLog({
+        actorUserId: resetRecord.userId,
+        action: 'auth.password_reset_completed',
+        entityType: 'user',
+        entityId: resetRecord.userId,
+        details: { email: resetRecord.email },
+      })
+    })
+
+    transaction()
+    scheduleBackup('auth-password-reset')
+    response.json({ message: 'Password updated. Log in with your new password.' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/auth/email-verification/resend', requireAuth, async (request, response, next) => {
+  try {
+    ensureTransactionalEmailAvailable()
+    const user = statements.findUserById.get(request.user.id)
+    if (!user?.email) {
+      throw createHttpError(400, 'Add a recovery email before requesting a verification message.')
+    }
+    if (user.email_verified_at) {
+      response.json({ message: 'Your recovery email is already verified.' })
+      return
+    }
+
+    await issueEmailVerification(user, 'auth.email_verification_resent')
+    response.json({ message: 'A fresh verification email has been sent.' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/account/email', requireAuth, async (request, response, next) => {
+  try {
+    ensureTransactionalEmailAvailable()
+    const email = normalizeEmail(request.body?.email)
+    const password = request.body?.password
+
+    validateEmail(email)
+    validatePassword(password)
+
+    const user = statements.findUserById.get(request.user.id)
+    if (!user || !verifyPassword(password, user)) {
+      throw createHttpError(401, 'The password you entered did not match your account.')
+    }
+
+    const existingUserForEmail = statements.findUserByEmail.get(email)
+    if (existingUserForEmail && existingUserForEmail.id !== request.user.id) {
+      throw createHttpError(409, 'That recovery email is already attached to another account. Use a different email or recover that account instead.')
+    }
+
+    const transaction = db.transaction(() => {
+      statements.updateUserEmail.run(email, request.user.id)
+      statements.deleteEmailVerificationTokensForUser.run(request.user.id)
+      writeAuditLog({
+        actorUserId: request.user.id,
+        action: 'account.recovery_email_updated',
+        entityType: 'user',
+        entityId: request.user.id,
+        details: { email },
+      })
+    })
+
+    transaction()
+    const updatedUser = statements.findUserById.get(request.user.id)
+    await issueEmailVerification(updatedUser)
+    scheduleBackup('account-recovery-email-update')
+    response.json({
+      user: serializeUser(request.user.id),
+      message: 'Recovery email updated. Check your inbox to verify it.',
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 app.delete('/api/account', requireAuth, (request, response, next) => {

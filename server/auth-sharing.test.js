@@ -15,6 +15,7 @@ const requestHeaders = {
 
 let tempDirectory
 let databaseFile
+let mailCaptureDirectory
 let serverProcess
 
 class SessionClient {
@@ -103,10 +104,44 @@ async function waitForCondition(check, { timeoutMs = 10000, intervalMs = 100 } =
   throw new Error('Timed out waiting for condition.')
 }
 
+async function waitForCapturedMail(category, recipient) {
+  let capturedMail = null
+
+  await waitForCondition(async () => {
+    const files = await fs.readdir(mailCaptureDirectory).catch(() => [])
+    for (const fileName of files.sort()) {
+      const content = await fs.readFile(path.join(mailCaptureDirectory, fileName), 'utf8')
+      const parsed = JSON.parse(content)
+      if (parsed.category === category && (!recipient || parsed.to === recipient)) {
+        capturedMail = parsed
+        return true
+      }
+    }
+
+    return false
+  })
+
+  return capturedMail
+}
+
+function extractTokenFromMail(capturedMail, queryParam) {
+  const mailUrl = capturedMail.text
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.startsWith('http://') || line.startsWith('https://'))
+
+  assert.ok(mailUrl)
+  const parsedUrl = new URL(mailUrl)
+  const token = parsedUrl.searchParams.get(queryParam)
+  assert.ok(token)
+  return token
+}
+
 describe('auth and guild sharing flows', () => {
   before(async () => {
     tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'eso-guild-bank-tests-'))
     databaseFile = path.join(tempDirectory, 'guild-bank-test.db')
+    mailCaptureDirectory = path.join(tempDirectory, 'mail-capture')
 
     serverProcess = spawn('node', ['server/index.js'], {
       cwd: process.cwd(),
@@ -117,6 +152,7 @@ describe('auth and guild sharing flows', () => {
         DATABASE_FILE: databaseFile,
         API_RATE_LIMIT: '1000',
         AUTH_RATE_LIMIT: '1000',
+        MAIL_CAPTURE_DIRECTORY: mailCaptureDirectory,
         BACKUP_MIN_INTERVAL_MS: '0',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -141,11 +177,17 @@ describe('auth and guild sharing flows', () => {
 
     const signUpResult = await user.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'owner_user', password: 'password1234' },
+      body: { username: 'owner_user', email: 'owner_user@example.com', password: 'password1234' },
     })
 
     assert.equal(signUpResult.response.status, 201)
     assert.equal(signUpResult.payload.user.username, 'owner_user')
+    assert.equal(signUpResult.payload.user.email, 'owner_user@example.com')
+    assert.equal(signUpResult.payload.user.emailVerified, false)
+    assert.equal(
+      signUpResult.payload.notice,
+      'Account created. Check your email to verify your recovery address.',
+    )
   const signUpCookie = signUpResult.response.headers.get('set-cookie')
   assert.ok(signUpCookie)
   assert.equal(signUpCookie.includes('HttpOnly'), true)
@@ -208,13 +250,13 @@ describe('auth and guild sharing flows', () => {
 
     const firstSignUp = await firstUser.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'taken_name', password: 'password1234' },
+      body: { username: 'taken_name', email: 'taken_name_a@example.com', password: 'password1234' },
     })
     assert.equal(firstSignUp.response.status, 201)
 
     const duplicateSignUp = await secondUser.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'taken_name', password: 'password1234' },
+      body: { username: 'taken_name', email: 'taken_name_b@example.com', password: 'password1234' },
     })
 
     assert.equal(duplicateSignUp.response.status, 409)
@@ -232,7 +274,7 @@ describe('auth and guild sharing flows', () => {
 
     const ownerSignUp = await owner.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'guild_owner', password: 'password1234' },
+      body: { username: 'guild_owner', email: 'guild_owner@example.com', password: 'password1234' },
     })
     assert.equal(ownerSignUp.response.status, 201)
 
@@ -245,7 +287,7 @@ describe('auth and guild sharing flows', () => {
 
     const memberSignUp = await member.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'shared_member', password: 'password1234' },
+      body: { username: 'shared_member', email: 'shared_member@example.com', password: 'password1234' },
     })
     assert.equal(memberSignUp.response.status, 201)
 
@@ -283,7 +325,7 @@ describe('auth and guild sharing flows', () => {
 
     const removedMemberSignUp = await removedMember.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'removed_member', password: 'password1234' },
+      body: { username: 'removed_member', email: 'removed_member@example.com', password: 'password1234' },
     })
     assert.equal(removedMemberSignUp.response.status, 201)
 
@@ -327,6 +369,71 @@ describe('auth and guild sharing flows', () => {
     assert.equal(actionNames.includes('guild.member_remove'), true)
   })
 
+  it('supports email verification and password reset', async () => {
+    const user = new SessionClient()
+
+    const signUpResult = await user.request('/api/auth/signup', {
+      method: 'POST',
+      body: { username: 'recover_me', email: 'recover_me@example.com', password: 'password1234' },
+    })
+    assert.equal(signUpResult.response.status, 201)
+    assert.equal(signUpResult.payload.user.emailVerified, false)
+
+    const verificationMail = await waitForCapturedMail('verify-email', 'recover_me@example.com')
+    const verificationToken = extractTokenFromMail(verificationMail, 'verify-email')
+
+    const verifyResult = await user.request('/api/auth/email-verification/verify', {
+      method: 'POST',
+      body: { token: verificationToken },
+    })
+    assert.equal(verifyResult.response.status, 200)
+    assert.equal(
+      verifyResult.payload.message,
+      'Recovery email verified. You can now reset your password if needed.',
+    )
+
+    const verifiedSession = await user.request('/api/session')
+    assert.equal(verifiedSession.response.status, 200)
+    assert.equal(verifiedSession.payload.user.emailVerified, true)
+
+    const requestReset = await user.request('/api/auth/password-reset/request', {
+      method: 'POST',
+      body: { email: 'recover_me@example.com' },
+    })
+    assert.equal(requestReset.response.status, 200)
+    assert.equal(
+      requestReset.payload.message,
+      'If that recovery email is attached to an account, a password reset link has been sent.',
+    )
+
+    const resetMail = await waitForCapturedMail('password-reset', 'recover_me@example.com')
+    const resetToken = extractTokenFromMail(resetMail, 'reset-password')
+
+    const confirmReset = await user.request('/api/auth/password-reset/confirm', {
+      method: 'POST',
+      body: { token: resetToken, password: 'brandnewpass123' },
+    })
+    assert.equal(confirmReset.response.status, 200)
+    assert.equal(confirmReset.payload.message, 'Password updated. Log in with your new password.')
+
+    const sessionAfterReset = await user.request('/api/session')
+    assert.equal(sessionAfterReset.response.status, 200)
+    assert.equal(sessionAfterReset.payload.user, null)
+
+    const oldPasswordLogin = await user.request('/api/auth/login', {
+      method: 'POST',
+      body: { username: 'recover_me', password: 'password1234' },
+    })
+    assert.equal(oldPasswordLogin.response.status, 401)
+
+    const newPasswordLogin = await user.request('/api/auth/login', {
+      method: 'POST',
+      body: { username: 'recover_me', password: 'brandnewpass123' },
+    })
+    assert.equal(newPasswordLogin.response.status, 200)
+    assert.equal(newPasswordLogin.payload.user.username, 'recover_me')
+  })
+
   it('enforces single-use invites and validates invite expiry input', async () => {
     const owner = new SessionClient()
     const firstMember = new SessionClient()
@@ -334,7 +441,7 @@ describe('auth and guild sharing flows', () => {
 
     const ownerSignUp = await owner.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'single_use_owner', password: 'password1234' },
+      body: { username: 'single_use_owner', email: 'single_use_owner@example.com', password: 'password1234' },
     })
     assert.equal(ownerSignUp.response.status, 201)
 
@@ -361,13 +468,13 @@ describe('auth and guild sharing flows', () => {
 
     const firstMemberSignUp = await firstMember.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'single_use_member_a', password: 'password1234' },
+      body: { username: 'single_use_member_a', email: 'single_use_member_a@example.com', password: 'password1234' },
     })
     assert.equal(firstMemberSignUp.response.status, 201)
 
     const secondMemberSignUp = await secondMember.request('/api/auth/signup', {
       method: 'POST',
-      body: { username: 'single_use_member_b', password: 'password1234' },
+      body: { username: 'single_use_member_b', email: 'single_use_member_b@example.com', password: 'password1234' },
     })
     assert.equal(secondMemberSignUp.response.status, 201)
 
