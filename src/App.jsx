@@ -1664,7 +1664,11 @@ function App() {
               guildDrawerWidth={guildDrawerWidth}
               newGuildName={newGuildName}
               setNewGuildName={setNewGuildName}
+              settingsInviteError={settingsInviteError}
+              settingsInviteCode={settingsInviteCode}
+              setSettingsInviteCode={setSettingsInviteCode}
               handleCreateGuild={handleCreateGuild}
+              handleRedeemInviteCode={handleRedeemInviteCode}
               mutationPending={mutationPending}
               handleOpenGuildAccess={handleOpenGuildAccess}
               handleRenameGuild={handleRenameGuild}

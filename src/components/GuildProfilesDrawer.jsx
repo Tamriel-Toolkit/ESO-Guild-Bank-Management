@@ -1,4 +1,4 @@
-import { Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemText, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemText, Stack, TextField, Typography } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ExitToAppIcon from '@mui/icons-material/ExitToApp'
@@ -9,7 +9,11 @@ function GuildProfilesDrawer({
   guildDrawerWidth,
   newGuildName,
   setNewGuildName,
+  settingsInviteError,
+  settingsInviteCode,
+  setSettingsInviteCode,
   handleCreateGuild,
+  handleRedeemInviteCode,
   mutationPending,
   handleOpenGuildAccess,
   handleRenameGuild,
@@ -65,6 +69,21 @@ function GuildProfilesDrawer({
           disabled={mutationPending}
         >
           Add
+        </Button>
+      </Stack>
+      <Stack spacing={1.5} sx={{ mb: 2 }}>
+        <Typography variant="subtitle2">Join Shared Guild</Typography>
+        {settingsInviteError && <Alert severity="error">{settingsInviteError}</Alert>}
+        <TextField
+          size="small"
+          label="Invite code"
+          value={settingsInviteCode}
+          onChange={(event) => setSettingsInviteCode(event.target.value.toUpperCase())}
+          placeholder="ABCD-EF12-3456"
+          fullWidth
+        />
+        <Button variant="outlined" onClick={handleRedeemInviteCode} disabled={mutationPending}>
+          Join guild
         </Button>
       </Stack>
       <Divider sx={{ mb: 1 }} />
