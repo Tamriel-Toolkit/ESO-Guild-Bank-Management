@@ -151,7 +151,6 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_guilds_user_id ON guilds (user_id);
   CREATE INDEX IF NOT EXISTS idx_entries_guild_id ON entries (guild_id);
   CREATE INDEX IF NOT EXISTS idx_guild_members_user_id ON guild_members (user_id);
@@ -180,6 +179,7 @@ if (!userColumns.some((column) => column.name === 'email')) {
 if (!userColumns.some((column) => column.name === 'email_verified_at')) {
   db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT')
 }
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL')
 
 db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(new Date().toISOString())
 db.prepare('DELETE FROM email_verification_tokens WHERE expires_at <= ?').run(new Date().toISOString())
