@@ -294,7 +294,7 @@ const createAllStatisticsRange = (entries) => {
 }
 
 const createCollapsedStatisticsSections = () => ({
-  Daily: true,
+  Daily: false,
   Weekly: false,
   Monthly: false,
   Overall: false,
@@ -1486,7 +1486,10 @@ function App() {
                     />
                     <Button
                       variant="outlined"
-                      onClick={() => setStatisticsRange(createAllStatisticsRange(activeEntries))}
+                      onClick={() => {
+                        setStatisticsRange(createAllStatisticsRange(activeEntries))
+                        setCollapsedStatisticsSections((prev) => ({ ...prev, Daily: true }))
+                      }}
                     >
                       All
                     </Button>
