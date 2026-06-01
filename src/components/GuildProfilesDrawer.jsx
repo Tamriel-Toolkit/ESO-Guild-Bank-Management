@@ -16,6 +16,9 @@ function GuildProfilesDrawer({
   handleDeleteGuild,
   handleLeaveGuild,
   handleSelectGuild,
+  isMobileLayout,
+  guildDrawerOpen,
+  setGuildDrawerOpen,
 }) {
   if (!currentUser) {
     return null
@@ -24,12 +27,15 @@ function GuildProfilesDrawer({
   return (
     <Drawer
       anchor="right"
-      variant="permanent"
+      variant={isMobileLayout ? 'temporary' : 'permanent'}
+      open={isMobileLayout ? guildDrawerOpen : true}
+      onClose={() => setGuildDrawerOpen(false)}
+      ModalProps={{ keepMounted: true }}
       sx={{
-        width: guildDrawerWidth,
+        width: isMobileLayout ? 'min(85vw, 360px)' : guildDrawerWidth,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: guildDrawerWidth,
+          width: isMobileLayout ? 'min(85vw, 360px)' : guildDrawerWidth,
           boxSizing: 'border-box',
           p: 2,
           top: { xs: 56, sm: 64 },
@@ -48,7 +54,16 @@ function GuildProfilesDrawer({
           onChange={(event) => setNewGuildName(event.target.value)}
           fullWidth
         />
-        <Button variant="contained" onClick={handleCreateGuild} disabled={mutationPending}>
+        <Button
+          variant="contained"
+          onClick={() => {
+            handleCreateGuild()
+            if (isMobileLayout) {
+              setGuildDrawerOpen(false)
+            }
+          }}
+          disabled={mutationPending}
+        >
           Add
         </Button>
       </Stack>
@@ -62,19 +77,52 @@ function GuildProfilesDrawer({
               <Stack direction="row" spacing={0.5}>
                 {guild.isOwner && (
                   <>
-                    <IconButton edge="end" onClick={() => handleOpenGuildAccess(guild.id)}>
+                    <IconButton
+                      edge="end"
+                      onClick={() => {
+                        handleOpenGuildAccess(guild.id)
+                        if (isMobileLayout) {
+                          setGuildDrawerOpen(false)
+                        }
+                      }}
+                    >
                       <GroupAddIcon fontSize="small" />
                     </IconButton>
-                    <IconButton edge="end" onClick={() => handleRenameGuild(guild.id, guild.name)}>
+                    <IconButton
+                      edge="end"
+                      onClick={() => {
+                        handleRenameGuild(guild.id, guild.name)
+                        if (isMobileLayout) {
+                          setGuildDrawerOpen(false)
+                        }
+                      }}
+                    >
                       <EditIcon fontSize="small" />
                     </IconButton>
-                    <IconButton edge="end" onClick={() => handleDeleteGuild(guild.id)}>
+                    <IconButton
+                      edge="end"
+                      onClick={() => {
+                        handleDeleteGuild(guild.id)
+                        if (isMobileLayout) {
+                          setGuildDrawerOpen(false)
+                        }
+                      }}
+                    >
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </>
                 )}
                 {!guild.isOwner && (
-                  <IconButton edge="end" onClick={() => handleLeaveGuild(guild)} disabled={mutationPending}>
+                  <IconButton
+                    edge="end"
+                    onClick={() => {
+                      handleLeaveGuild(guild)
+                      if (isMobileLayout) {
+                        setGuildDrawerOpen(false)
+                      }
+                    }}
+                    disabled={mutationPending}
+                  >
                     <ExitToAppIcon fontSize="small" />
                   </IconButton>
                 )}
@@ -83,7 +131,12 @@ function GuildProfilesDrawer({
           >
             <ListItemButton
               selected={guild.id === currentUser.selectedGuildId}
-              onClick={() => handleSelectGuild(guild.id)}
+              onClick={() => {
+                handleSelectGuild(guild.id)
+                if (isMobileLayout) {
+                  setGuildDrawerOpen(false)
+                }
+              }}
             >
               <ListItemText
                 primary={guild.name}

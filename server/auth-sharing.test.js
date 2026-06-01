@@ -22,8 +22,13 @@ class SessionClient {
     this.cookieHeader = ''
   }
 
-  async request(targetPath, { method = 'GET', body } = {}) {
+  async request(targetPath, { method = 'GET', body, headers: customHeaders = {}, omitHeaders = [] } = {}) {
     const headers = { ...requestHeaders }
+    for (const headerName of omitHeaders) {
+      delete headers[headerName]
+    }
+    Object.assign(headers, customHeaders)
+
     if (this.cookieHeader) {
       headers.Cookie = this.cookieHeader
     }
@@ -110,6 +115,8 @@ describe('auth and guild sharing flows', () => {
         NODE_ENV: 'test',
         PORT: String(serverPort),
         DATABASE_FILE: databaseFile,
+        API_RATE_LIMIT: '1000',
+        AUTH_RATE_LIMIT: '1000',
         BACKUP_MIN_INTERVAL_MS: '0',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -139,6 +146,11 @@ describe('auth and guild sharing flows', () => {
 
     assert.equal(signUpResult.response.status, 201)
     assert.equal(signUpResult.payload.user.username, 'owner_user')
+  const signUpCookie = signUpResult.response.headers.get('set-cookie')
+  assert.ok(signUpCookie)
+  assert.equal(signUpCookie.includes('HttpOnly'), true)
+  assert.equal(signUpCookie.includes('SameSite=Lax'), true)
+  assert.equal(signUpCookie.includes('Path=/'), true)
 
     const sessionResult = await user.request('/api/session')
     assert.equal(sessionResult.response.status, 200)
@@ -154,6 +166,40 @@ describe('auth and guild sharing flows', () => {
 
     assert.equal(loginResult.response.status, 200)
     assert.equal(loginResult.payload.user.username, 'owner_user')
+  })
+
+  it('exposes health details and baseline security headers', async () => {
+    const response = await fetch(`${serverOrigin}/healthz`)
+    const payload = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(payload.ok, true)
+    assert.equal(payload.service, 'eso-guild-gold-ledger')
+    assert.equal(payload.publicAppUrl, 'https://www.esoguildgoldledger.com')
+    assert.ok(Number.isNaN(Date.parse(payload.timestamp)) === false)
+
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff')
+    assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin')
+    assert.equal(response.headers.get('x-frame-options'), 'SAMEORIGIN')
+    assert.equal(response.headers.get('content-security-policy')?.includes("default-src 'self'"), true)
+  })
+
+  it('rejects mutating API requests without the CSRF header', async () => {
+    const response = await fetch(`${serverOrigin}/api/auth/signup`, {
+      method: 'POST',
+      headers: {
+        Origin: requestHeaders.Origin,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username: 'csrf_user', password: 'password1234' }),
+    })
+    const payload = await response.json()
+
+    assert.equal(response.status, 403)
+    assert.equal(
+      payload.error,
+      'This request is missing a required security header. Refresh the page and try again.',
+    )
   })
 
   it('returns a JSON error when a username is already in use', async () => {
@@ -279,5 +325,67 @@ describe('auth and guild sharing flows', () => {
     assert.equal(actionNames.includes('guild.invite_redeem'), true)
     assert.equal(actionNames.includes('guild.leave'), true)
     assert.equal(actionNames.includes('guild.member_remove'), true)
+  })
+
+  it('enforces single-use invites and validates invite expiry input', async () => {
+    const owner = new SessionClient()
+    const firstMember = new SessionClient()
+    const secondMember = new SessionClient()
+
+    const ownerSignUp = await owner.request('/api/auth/signup', {
+      method: 'POST',
+      body: { username: 'single_use_owner', password: 'password1234' },
+    })
+    assert.equal(ownerSignUp.response.status, 201)
+
+    const guildCreate = await owner.request('/api/guilds', {
+      method: 'POST',
+      body: { name: 'Invite Rules Guild', weekStartDate: '2026-05-31' },
+    })
+    assert.equal(guildCreate.response.status, 201)
+    const guildId = guildCreate.payload.user.selectedGuildId
+
+    const invalidInvite = await owner.request(`/api/guilds/${guildId}/invites`, {
+      method: 'POST',
+      body: { singleUse: true, expiresInHours: 0 },
+    })
+    assert.equal(invalidInvite.response.status, 400)
+    assert.equal(invalidInvite.payload.error, 'Choose a valid invite expiration time.')
+
+    const createInvite = await owner.request(`/api/guilds/${guildId}/invites`, {
+      method: 'POST',
+      body: { singleUse: true, expiresInHours: 24 },
+    })
+    assert.equal(createInvite.response.status, 201)
+    assert.equal(createInvite.payload.singleUse, true)
+
+    const firstMemberSignUp = await firstMember.request('/api/auth/signup', {
+      method: 'POST',
+      body: { username: 'single_use_member_a', password: 'password1234' },
+    })
+    assert.equal(firstMemberSignUp.response.status, 201)
+
+    const secondMemberSignUp = await secondMember.request('/api/auth/signup', {
+      method: 'POST',
+      body: { username: 'single_use_member_b', password: 'password1234' },
+    })
+    assert.equal(secondMemberSignUp.response.status, 201)
+
+    const firstRedeem = await firstMember.request('/api/invites/redeem', {
+      method: 'POST',
+      body: { code: createInvite.payload.code },
+    })
+    assert.equal(firstRedeem.response.status, 200)
+    assert.equal(firstRedeem.payload.user.guilds.some((guild) => guild.id === guildId), true)
+
+    const secondRedeem = await secondMember.request('/api/invites/redeem', {
+      method: 'POST',
+      body: { code: createInvite.payload.code },
+    })
+    assert.equal(secondRedeem.response.status, 404)
+    assert.equal(
+      secondRedeem.payload.error,
+      'That invite code is not valid anymore. It may be incorrect, expired, or already used.',
+    )
   })
 })

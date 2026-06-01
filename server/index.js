@@ -23,6 +23,8 @@ const sessionCookieName = process.env.SESSION_COOKIE_NAME || 'eso_guild_bank_ses
 const publicAppUrl = String(process.env.PUBLIC_APP_URL || 'https://www.esoguildgoldledger.com').replace(/\/$/, '')
 const sessionTtlDays = Number(process.env.SESSION_TTL_DAYS) || 14
 const sessionTtlMs = sessionTtlDays * 24 * 60 * 60 * 1000
+const apiRateLimitMax = Number(process.env.API_RATE_LIMIT) || 300
+const authRateLimitMax = Number(process.env.AUTH_RATE_LIMIT) || 10
 const backupRetentionCount = Number(process.env.BACKUP_RETENTION_COUNT) || 20
 const backupMinIntervalMs = Number(process.env.BACKUP_MIN_INTERVAL_MS) || 5 * 60 * 1000
 const isProduction = process.env.NODE_ENV === 'production'
@@ -362,7 +364,7 @@ function hasTrustedRequestOrigin(request) {
 
 const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 300,
+  limit: apiRateLimitMax,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   handler: (_request, _response, next) => {
@@ -372,7 +374,7 @@ const apiRateLimiter = rateLimit({
 
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: authRateLimitMax,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   handler: (_request, _response, next) => {

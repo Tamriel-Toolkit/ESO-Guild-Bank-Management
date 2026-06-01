@@ -22,6 +22,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TableSortLabel,
@@ -30,11 +31,13 @@ import {
   Typography,
   ThemeProvider,
   createTheme,
+  useMediaQuery,
 } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import {
   createEntryForGuild,
@@ -360,6 +363,7 @@ const theme = createTheme({
 })
 
 function App() {
+  const isMobileLayout = useMediaQuery(theme.breakpoints.down('md'))
   const [guestState, setGuestState] = useState(createGuestState)
   const [legacyState, setLegacyState] = useState(readLegacyState)
   const [serverUser, setServerUser] = useState(null)
@@ -393,6 +397,7 @@ function App() {
   )
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [mutationPending, setMutationPending] = useState(false)
+  const [guildDrawerOpen, setGuildDrawerOpen] = useState(false)
 
   const sessionUser = serverUser?.username ?? null
   const currentUser = serverUser
@@ -1019,13 +1024,44 @@ function App() {
       <CssBaseline />
       <Box className="eso-bg" sx={{ minHeight: '100vh', pb: 6 }}>
         <AppBar position="static" color="transparent" sx={{ backdropFilter: 'blur(4px)' }}>
-          <Toolbar>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              ESO Guild Bank Management
-            </Typography>
+          <Toolbar sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexGrow: 1, minWidth: 0 }}>
+              <Box
+                component="img"
+                src="/eso-coin-favicon.svg"
+                alt="ESO Guild Gold Ledger coin"
+                sx={{ width: 26, height: 26, flexShrink: 0 }}
+              />
+              <Typography variant="h6" sx={{ minWidth: 0, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                ESO Guild Gold Ledger
+              </Typography>
+            </Box>
             {sessionUser ? (
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip label={`Logged in: ${sessionUser}`} color="primary" />
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                useFlexGap
+                flexWrap="wrap"
+                justifyContent="flex-end"
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              >
+                {isMobileLayout && (
+                  <IconButton
+                    color="inherit"
+                    onClick={() => setGuildDrawerOpen(true)}
+                    disabled={mutationPending}
+                    aria-label="Open guild profiles"
+                  >
+                    <MenuIcon />
+                  </IconButton>
+                )}
+                <Chip
+                  label={`Logged in: ${sessionUser}`}
+                  color="primary"
+                  size="small"
+                  sx={{ maxWidth: { xs: '100%', sm: 280 } }}
+                />
                 <IconButton color="inherit" onClick={() => setSettingsOpen(true)} disabled={mutationPending}>
                   <SettingsIcon />
                 </IconButton>
@@ -1042,7 +1078,7 @@ function App() {
         </AppBar>
 
         <Box sx={{ display: 'flex' }}>
-          <Box sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}>
             <Typography variant="h4" gutterBottom>
               Track Guild Gold Flow
             </Typography>
@@ -1170,7 +1206,7 @@ function App() {
                       value={statisticsRange.startDate}
                       onChange={(event) => handleStatisticsRangeChange('startDate', event.target.value)}
                       inputProps={{ 'aria-label': 'Start date' }}
-                      sx={{ minWidth: 170 }}
+                      sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 170 } }}
                     />
                     <Typography variant="body1">&ndash;</Typography>
                     <TextField
@@ -1178,7 +1214,7 @@ function App() {
                       value={statisticsRange.endDate}
                       onChange={(event) => handleStatisticsRangeChange('endDate', event.target.value)}
                       inputProps={{ 'aria-label': 'End date' }}
-                      sx={{ minWidth: 170 }}
+                      sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 170 } }}
                     />
                     <Button
                       variant="outlined"
@@ -1191,68 +1227,70 @@ function App() {
                     </Button>
                   </Stack>
                 </Stack>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Range</TableCell>
-                      <TableCell align="right">Deposits</TableCell>
-                      <TableCell align="right">Withdrawals</TableCell>
-                      <TableCell align="right">Sales Tax</TableCell>
-                      <TableCell align="right">Grand Total</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {statisticsRows.map((statisticsRow) => {
-                      if (statisticsRow.isSectionHeader) {
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 560 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Range</TableCell>
+                        <TableCell align="right">Deposits</TableCell>
+                        <TableCell align="right">Withdrawals</TableCell>
+                        <TableCell align="right">Sales Tax</TableCell>
+                        <TableCell align="right">Grand Total</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {statisticsRows.map((statisticsRow) => {
+                        if (statisticsRow.isSectionHeader) {
+                          return (
+                            <TableRow key={statisticsRow.section}>
+                              <TableCell colSpan={5} sx={{ fontWeight: 700, pt: 2, pb: 1 }}>
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  alignItems="center"
+                                  sx={{ cursor: 'pointer' }}
+                                  onClick={() => toggleStatisticsSection(statisticsRow.section)}
+                                >
+                                  <IconButton size="small" aria-label={`Toggle ${statisticsRow.section}`}>
+                                    {collapsedStatisticsSections[statisticsRow.section] ? (
+                                      <ExpandMoreIcon fontSize="small" />
+                                    ) : (
+                                      <ExpandLessIcon fontSize="small" />
+                                    )}
+                                  </IconButton>
+                                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                    {statisticsRow.section}
+                                  </Typography>
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        }
+
+                        if (collapsedStatisticsSections[statisticsRow.section]) {
+                          return null
+                        }
+
+                        const grandTotal =
+                          statisticsRow.totals.deposit +
+                          statisticsRow.totals.salesTax -
+                          statisticsRow.totals.withdrawal
+
                         return (
-                          <TableRow key={statisticsRow.section}>
-                            <TableCell colSpan={5} sx={{ fontWeight: 700, pt: 2, pb: 1 }}>
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                alignItems="center"
-                                sx={{ cursor: 'pointer' }}
-                                onClick={() => toggleStatisticsSection(statisticsRow.section)}
-                              >
-                                <IconButton size="small" aria-label={`Toggle ${statisticsRow.section}`}>
-                                  {collapsedStatisticsSections[statisticsRow.section] ? (
-                                    <ExpandMoreIcon fontSize="small" />
-                                  ) : (
-                                    <ExpandLessIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                                  {statisticsRow.section}
-                                </Typography>
-                              </Stack>
+                          <TableRow key={`${statisticsRow.section}-${statisticsRow.label}`}>
+                            <TableCell>{statisticsRow.label}</TableCell>
+                            <TableCell align="right">{fmtGold(statisticsRow.totals.deposit)}</TableCell>
+                            <TableCell align="right">{fmtGold(statisticsRow.totals.withdrawal)}</TableCell>
+                            <TableCell align="right">{fmtGold(statisticsRow.totals.salesTax)}</TableCell>
+                            <TableCell align="right" sx={grandTotal < 0 ? { color: 'error.main' } : undefined}>
+                              {fmtGold(grandTotal)}
                             </TableCell>
                           </TableRow>
                         )
-                      }
-
-                      if (collapsedStatisticsSections[statisticsRow.section]) {
-                        return null
-                      }
-
-                      const grandTotal =
-                        statisticsRow.totals.deposit +
-                        statisticsRow.totals.salesTax -
-                        statisticsRow.totals.withdrawal
-
-                      return (
-                        <TableRow key={`${statisticsRow.section}-${statisticsRow.label}`}>
-                          <TableCell>{statisticsRow.label}</TableCell>
-                          <TableCell align="right">{fmtGold(statisticsRow.totals.deposit)}</TableCell>
-                          <TableCell align="right">{fmtGold(statisticsRow.totals.withdrawal)}</TableCell>
-                          <TableCell align="right">{fmtGold(statisticsRow.totals.salesTax)}</TableCell>
-                          <TableCell align="right" sx={grandTotal < 0 ? { color: 'error.main' } : undefined}>
-                            {fmtGold(grandTotal)}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </CardContent>
             </Card>
 
@@ -1287,7 +1325,7 @@ function App() {
                       boundaryCount={1}
                     />
                   </Stack>
-                  <FormControl size="small" sx={{ minWidth: 150, alignSelf: { xs: 'flex-end', md: 'auto' } }}>
+                  <FormControl size="small" sx={{ minWidth: 150, alignSelf: { xs: 'stretch', md: 'auto' } }}>
                     <InputLabel id="entries-per-page-label">Entries per page</InputLabel>
                     <Select
                       labelId="entries-per-page-label"
@@ -1303,90 +1341,92 @@ function App() {
                     </Select>
                   </FormControl>
                 </Stack>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sortDirection={entrySort.column === 'date' ? entrySort.direction : false}>
-                        <TableSortLabel
-                          active={entrySort.column === 'date'}
-                          direction={entrySort.column === 'date' ? entrySort.direction : 'asc'}
-                          onClick={() => handleEntrySort('date')}
-                        >
-                          Date
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={entrySort.column === 'type' ? entrySort.direction : false}>
-                        <TableSortLabel
-                          active={entrySort.column === 'type'}
-                          direction={entrySort.column === 'type' ? entrySort.direction : 'asc'}
-                          onClick={() => handleEntrySort('type')}
-                        >
-                          Type
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={entrySort.column === 'user' ? entrySort.direction : false}>
-                        <TableSortLabel
-                          active={entrySort.column === 'user'}
-                          direction={entrySort.column === 'user' ? entrySort.direction : 'asc'}
-                          onClick={() => handleEntrySort('user')}
-                        >
-                          User
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sortDirection={entrySort.column === 'amount' ? entrySort.direction : false}
-                      >
-                        <TableSortLabel
-                          active={entrySort.column === 'amount'}
-                          direction={entrySort.column === 'amount' ? entrySort.direction : 'asc'}
-                          onClick={() => handleEntrySort('amount')}
-                        >
-                          Amount
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={entrySort.column === 'notes' ? entrySort.direction : false}>
-                        <TableSortLabel
-                          active={entrySort.column === 'notes'}
-                          direction={entrySort.column === 'notes' ? entrySort.direction : 'asc'}
-                          onClick={() => handleEntrySort('notes')}
-                        >
-                          Notes
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {activeEntries.length === 0 ? (
+                <TableContainer sx={{ overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 720 }}>
+                    <TableHead>
                       <TableRow>
-                        <TableCell colSpan={6} align="center">
-                          No entries yet.
+                        <TableCell sortDirection={entrySort.column === 'date' ? entrySort.direction : false}>
+                          <TableSortLabel
+                            active={entrySort.column === 'date'}
+                            direction={entrySort.column === 'date' ? entrySort.direction : 'asc'}
+                            onClick={() => handleEntrySort('date')}
+                          >
+                            Date
+                          </TableSortLabel>
                         </TableCell>
+                        <TableCell sortDirection={entrySort.column === 'type' ? entrySort.direction : false}>
+                          <TableSortLabel
+                            active={entrySort.column === 'type'}
+                            direction={entrySort.column === 'type' ? entrySort.direction : 'asc'}
+                            onClick={() => handleEntrySort('type')}
+                          >
+                            Type
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sortDirection={entrySort.column === 'user' ? entrySort.direction : false}>
+                          <TableSortLabel
+                            active={entrySort.column === 'user'}
+                            direction={entrySort.column === 'user' ? entrySort.direction : 'asc'}
+                            onClick={() => handleEntrySort('user')}
+                          >
+                            User
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell
+                          align="right"
+                          sortDirection={entrySort.column === 'amount' ? entrySort.direction : false}
+                        >
+                          <TableSortLabel
+                            active={entrySort.column === 'amount'}
+                            direction={entrySort.column === 'amount' ? entrySort.direction : 'asc'}
+                            onClick={() => handleEntrySort('amount')}
+                          >
+                            Amount
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sortDirection={entrySort.column === 'notes' ? entrySort.direction : false}>
+                          <TableSortLabel
+                            active={entrySort.column === 'notes'}
+                            direction={entrySort.column === 'notes' ? entrySort.direction : 'asc'}
+                            onClick={() => handleEntrySort('notes')}
+                          >
+                            Notes
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell align="right">Actions</TableCell>
                       </TableRow>
-                    ) : (
-                      visibleEntries.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell>{formatDisplayDate(entry.date)}</TableCell>
-                          <TableCell>
-                            {entryTypes.find((entryType) => entryType.value === entry.type)?.label}
-                          </TableCell>
-                          <TableCell>{entry.user || '—'}</TableCell>
-                          <TableCell align="right">{fmtGold(entry.amount)}</TableCell>
-                          <TableCell>{entry.notes || '—'}</TableCell>
-                          <TableCell align="right">
-                            <IconButton onClick={() => setEditingEntry({ ...entry })}>
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton onClick={() => deleteEntry(entry.id)} disabled={mutationPending}>
-                              <DeleteIcon />
-                            </IconButton>
+                    </TableHead>
+                    <TableBody>
+                      {activeEntries.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} align="center">
+                            No entries yet.
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        visibleEntries.map((entry) => (
+                          <TableRow key={entry.id}>
+                            <TableCell>{formatDisplayDate(entry.date)}</TableCell>
+                            <TableCell>
+                              {entryTypes.find((entryType) => entryType.value === entry.type)?.label}
+                            </TableCell>
+                            <TableCell>{entry.user || '—'}</TableCell>
+                            <TableCell align="right">{fmtGold(entry.amount)}</TableCell>
+                            <TableCell>{entry.notes || '—'}</TableCell>
+                            <TableCell align="right">
+                              <IconButton onClick={() => setEditingEntry({ ...entry })}>
+                                <EditIcon />
+                              </IconButton>
+                              <IconButton onClick={() => deleteEntry(entry.id)} disabled={mutationPending}>
+                                <DeleteIcon />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </CardContent>
             </Card>
           </Box>
@@ -1404,10 +1444,13 @@ function App() {
               handleDeleteGuild={handleDeleteGuild}
               handleLeaveGuild={handleLeaveGuild}
               handleSelectGuild={handleSelectGuild}
+              isMobileLayout={isMobileLayout}
+              guildDrawerOpen={guildDrawerOpen}
+              setGuildDrawerOpen={setGuildDrawerOpen}
             />
           )}
 
-          {sessionUser && <Box sx={{ width: guildDrawerWidth, flexShrink: 0 }} />}
+          {sessionUser && !isMobileLayout && <Box sx={{ width: guildDrawerWidth, flexShrink: 0 }} />}
         </Box>
       </Box>
 
