@@ -294,7 +294,7 @@ const createAllStatisticsRange = (entries) => {
 }
 
 const createCollapsedStatisticsSections = () => ({
-  Daily: false,
+  Daily: true,
   Weekly: false,
   Monthly: false,
   Overall: false,
@@ -325,11 +325,6 @@ const buildStatisticsRows = (entries, statisticsRange) => {
   const monthlyRows = []
   const startDay = isoToDay(startDate)
   const endDay = isoToDay(endDate)
-  const entryInRange = (entryDate, periodStart, periodEnd) =>
-    entryDate >= startDate &&
-    entryDate <= endDate &&
-    entryDate >= periodStart &&
-    entryDate <= periodEnd
 
   for (let day = new Date(startDay); day <= endDay; day = addDays(day, 1)) {
     const dayIso = dayToIso(day)
@@ -339,6 +334,7 @@ const buildStatisticsRows = (entries, statisticsRange) => {
       topDonors: computeTopDonors(entries, (entry) => entry.date === dayIso),
     })
   }
+  dailyRows.reverse()
 
   for (
     let weekStart = startOfWeek(startDay);
@@ -349,10 +345,11 @@ const buildStatisticsRows = (entries, statisticsRange) => {
     const weekEndIso = dayToIso(endOfWeek(weekStart))
     weeklyRows.push({
       label: formatDisplayDateRange(weekStartIso, weekEndIso),
-      totals: computeTotals(entries, (entry) => entryInRange(entry.date, weekStartIso, weekEndIso)),
-      topDonors: computeTopDonors(entries, (entry) => entryInRange(entry.date, weekStartIso, weekEndIso)),
+      totals: computeTotals(entries, (entry) => entry.date >= weekStartIso && entry.date <= weekEndIso),
+      topDonors: computeTopDonors(entries, (entry) => entry.date >= weekStartIso && entry.date <= weekEndIso),
     })
   }
+  weeklyRows.reverse()
 
   for (
     let monthStart = startOfMonth(startDay);
@@ -363,14 +360,12 @@ const buildStatisticsRows = (entries, statisticsRange) => {
     const monthEndIso = dayToIso(endOfMonth(monthStart))
     monthlyRows.push({
       label: formatDisplayDateRange(monthStartIso, monthEndIso),
-      totals: computeTotals(entries, (entry) => entryInRange(entry.date, monthStartIso, monthEndIso)),
-      topDonors: computeTopDonors(entries, (entry) => entryInRange(entry.date, monthStartIso, monthEndIso)),
+      totals: computeTotals(entries, (entry) => entry.date >= monthStartIso && entry.date <= monthEndIso),
+      topDonors: computeTopDonors(entries, (entry) => entry.date >= monthStartIso && entry.date <= monthEndIso),
     })
   }
+  monthlyRows.reverse()
 
-  addStatisticsSection(rows, 'Daily', dailyRows)
-  addStatisticsSection(rows, 'Weekly', weeklyRows)
-  addStatisticsSection(rows, 'Monthly', monthlyRows)
   addStatisticsSection(rows, 'Overall', [
     {
       label: formatDisplayDateRange(startDate, endDate),
@@ -378,6 +373,9 @@ const buildStatisticsRows = (entries, statisticsRange) => {
       topDonors: computeTopDonors(entries, (entry) => entry.date >= startDate && entry.date <= endDate),
     },
   ])
+  addStatisticsSection(rows, 'Monthly', monthlyRows)
+  addStatisticsSection(rows, 'Weekly', weeklyRows)
+  addStatisticsSection(rows, 'Daily', dailyRows)
 
   return rows
 }
