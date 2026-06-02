@@ -178,6 +178,8 @@ export const createGuildInvite = (guildId, payload) =>
     body: payload,
   })
 
+export const getGuildAuditLogs = (guildId) => apiRequest(`/api/guilds/${guildId}/audit-logs`)
+
 export const redeemGuildInvite = (code) =>
   apiRequest('/api/invites/redeem', {
     method: 'POST',

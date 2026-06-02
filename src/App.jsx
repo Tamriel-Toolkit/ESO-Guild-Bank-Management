@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AppBar,
@@ -39,6 +39,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutlineOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import {
@@ -49,6 +50,7 @@ import {
   deleteAccount,
   deleteEntryFromGuild,
   deleteGuild,
+  getGuildAuditLogs,
   getSession,
   importGuestGuild,
   leaveGuild as leaveGuildRequest,
@@ -66,6 +68,7 @@ import {
   verifyEmailToken,
 } from './api'
 import AuthDialog from './components/AuthDialog'
+import AuditLogDialog from './components/AuditLogDialog'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
@@ -74,6 +77,7 @@ import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
 import PieBreakdownChart from './components/PieBreakdownChart'
 import SettingsDialog from './components/SettingsDialog'
 import Graph from './components/Graph'
+import TutorialOverlay from './components/TutorialOverlay'
 import './App.css'
 
 const LEGACY_STORAGE_KEY = 'eso-guild-bank-management-v1'
@@ -415,6 +419,15 @@ const theme = createTheme({
 })
 
 function App() {
+  const heroRef = useRef(null)
+  const authActionRef = useRef(null)
+  const mobileGuildMenuRef = useRef(null)
+  const addEntryRef = useRef(null)
+  const statisticsRef = useRef(null)
+  const graphRef = useRef(null)
+  const logEntriesRef = useRef(null)
+  const guildDrawerRef = useRef(null)
+
   const isMobileLayout = useMediaQuery(theme.breakpoints.down('md'))
   const [guestState, setGuestState] = useState(createGuestState)
   const [legacyState, setLegacyState] = useState(readLegacyState)
@@ -461,6 +474,12 @@ function App() {
   const [authSubmitting, setAuthSubmitting] = useState(false)
   const [mutationPending, setMutationPending] = useState(false)
   const [guildDrawerOpen, setGuildDrawerOpen] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
+  const [auditLogOpen, setAuditLogOpen] = useState(false)
+  const [auditLogGuild, setAuditLogGuild] = useState(null)
+  const [auditLogs, setAuditLogs] = useState([])
+  const [auditLogLoading, setAuditLogLoading] = useState(false)
+  const [auditLogError, setAuditLogError] = useState('')
 
   const sessionUser = serverUser?.username ?? null
   const currentUser = serverUser
@@ -474,6 +493,51 @@ function App() {
   const hasLegacyData = Boolean(
     legacyState && (legacyState.guest.entries.length > 0 || legacyUserGuilds.length > 0),
   )
+
+  const tutorialSteps = useMemo(() => {
+    const accountStep = sessionUser
+      ? {
+          title: isMobileLayout ? 'Guild Tools Menu' : 'Guild Profiles',
+          body: isMobileLayout
+            ? 'Open this menu to switch guilds, create a new guild, join shared guilds, and manage member access from one place.'
+            : 'This sidebar is where guild management lives. You can create guilds, switch between them, invite members, and manage shared access here.',
+          targetRef: isMobileLayout ? mobileGuildMenuRef : guildDrawerRef,
+        }
+      : {
+          title: 'Sign In When You Are Ready',
+          body: 'Guest mode works for quick testing, but accounts let you save data to the server, manage shared guilds, and recover access later.',
+          targetRef: authActionRef,
+        }
+
+    return [
+      {
+        title: 'Welcome to the Guild Ledger',
+        body: 'This walkthrough highlights the main tools for logging gold movement, reviewing trends, and managing guild spaces. You can skip it at any time.',
+        targetRef: heroRef,
+      },
+      accountStep,
+      {
+        title: 'Add Entries Quickly',
+        body: 'Use this form to record deposits, withdrawals, and sales tax. Deposit toggles classify donations or dues, and withdrawal toggles capture where gold was spent.',
+        targetRef: addEntryRef,
+      },
+      {
+        title: 'Read the Totals',
+        body: 'The statistics table rolls entries into overall, monthly, weekly, and daily views so you can spot changes without scanning the full log.',
+        targetRef: statisticsRef,
+      },
+      {
+        title: 'Explore the Charts',
+        body: 'The graph area gives you toggleable trend lines plus a breakdown chart for deposits and withdrawals. Use the date range above to focus the view.',
+        targetRef: graphRef,
+      },
+      {
+        title: 'Review the Entry Log',
+        body: 'The log is your detailed audit trail. Sort it, page through it, and edit or delete individual entries whenever records need correction.',
+        targetRef: logEntriesRef,
+      },
+    ]
+  }, [isMobileLayout, sessionUser])
 
   useEffect(() => {
     let isCancelled = false
@@ -505,6 +569,10 @@ function App() {
       isCancelled = true
     }
   }, [])
+
+  const handleFinishTutorial = () => {
+    setTutorialOpen(false)
+  }
 
   useEffect(() => {
     if (!sessionUser || !selectedGuild?.id) {
@@ -837,6 +905,7 @@ function App() {
     const username = authDraft.username.trim().toLowerCase()
     const email = authDraft.email.trim().toLowerCase()
     const password = authDraft.password
+    const shouldOpenTutorial = authMode === 'signup'
 
     if (!username || !password || (authMode === 'signup' && !email)) {
       setAuthError(
@@ -870,6 +939,9 @@ function App() {
           ? 'Account created. Your data is now stored on the server.'
           : 'Logged in successfully.'),
       )
+      if (shouldOpenTutorial) {
+        setTutorialOpen(true)
+      }
     } catch (error) {
       setAuthError(error.message)
     } finally {
@@ -1034,6 +1106,38 @@ function App() {
     setGuildAccessError('')
     setGuildAccessInviteSingleUse(true)
     setGuildAccessInviteExpiry('never')
+  }
+
+  const handleOpenAuditLog = async (guild) => {
+    if (!guild?.id || !guild.isOwner) {
+      return
+    }
+
+    setAuditLogGuild({ id: guild.id, name: guild.name })
+    setAuditLogOpen(true)
+    setAuditLogs([])
+    setAuditLogError('')
+    setAuditLogLoading(true)
+
+    try {
+      const response = await getGuildAuditLogs(guild.id)
+      setAuditLogs(response.auditLogs ?? [])
+    } catch (error) {
+      setAuditLogError(error.message)
+    } finally {
+      setAuditLogLoading(false)
+    }
+  }
+
+  const handleCloseAuditLog = () => {
+    if (auditLogLoading) {
+      return
+    }
+
+    setAuditLogOpen(false)
+    setAuditLogGuild(null)
+    setAuditLogs([])
+    setAuditLogError('')
   }
 
   const handleCreateGuildInvite = async () => {
@@ -1294,8 +1398,12 @@ function App() {
                 justifyContent="flex-end"
                 sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
+                <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
+                  <HelpOutlineIcon />
+                </IconButton>
                 {isMobileLayout && (
                   <IconButton
+                    ref={mobileGuildMenuRef}
                     color="inherit"
                     onClick={() => setGuildDrawerOpen(true)}
                     disabled={mutationPending}
@@ -1318,21 +1426,28 @@ function App() {
                 </Button>
               </Stack>
             ) : (
-              <Button color="inherit" onClick={() => setAuthOpen(true)} disabled={sessionLoading}>
-                Sign up / Log in
-              </Button>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
+                  <HelpOutlineIcon />
+                </IconButton>
+                <Button ref={authActionRef} color="inherit" onClick={() => setAuthOpen(true)} disabled={sessionLoading}>
+                  Sign up / Log in
+                </Button>
+              </Stack>
             )}
           </Toolbar>
         </AppBar>
 
         <Box sx={{ display: 'flex' }}>
           <Box sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}>
-            <Typography variant="h4" gutterBottom>
-              Track Guild Gold Flow
-            </Typography>
-            <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
-              Log deposits, withdrawals, and sales tax income with editable notes.
-            </Typography>
+            <Box ref={heroRef}>
+              <Typography variant="h4" gutterBottom>
+                Track Guild Gold Flow
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
+                Log deposits, withdrawals, and sales tax income with editable notes.
+              </Typography>
+            </Box>
 
             <Stack spacing={2} sx={{ mb: 3 }}>
               {sessionLoading && <Alert severity="info">Restoring your secure session...</Alert>}
@@ -1394,7 +1509,7 @@ function App() {
               )}
             </Stack>
 
-            <Card sx={{ mb: 3 }}>
+            <Card ref={addEntryRef} sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
                   Add Entry
@@ -1530,7 +1645,7 @@ function App() {
               </CardContent>
             </Card>
 
-            <Card sx={{ mb: 3 }}>
+            <Card ref={statisticsRef} sx={{ mb: 3 }}>
               <CardContent>
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
@@ -1651,7 +1766,7 @@ function App() {
               </CardContent>
             </Card>
 
-            <Card sx={{ mb: 3 }}>
+            <Card ref={graphRef} sx={{ mb: 3 }}>
               <CardContent>
                 <Stack spacing={3}>
                   <Box>
@@ -1670,7 +1785,7 @@ function App() {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card ref={logEntriesRef}>
               <CardContent>
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
@@ -1829,6 +1944,7 @@ function App() {
           {sessionUser && (
             <GuildProfilesDrawer
               currentUser={currentUser}
+              drawerContentRef={guildDrawerRef}
               guildDrawerWidth={guildDrawerWidth}
               newGuildName={newGuildName}
               setNewGuildName={setNewGuildName}
@@ -1838,6 +1954,7 @@ function App() {
               handleCreateGuild={handleCreateGuild}
               handleRedeemInviteCode={handleRedeemInviteCode}
               mutationPending={mutationPending}
+              handleOpenAuditLog={handleOpenAuditLog}
               handleOpenGuildAccess={handleOpenGuildAccess}
               handleRenameGuild={handleRenameGuild}
               handleDeleteGuild={handleDeleteGuild}
@@ -1930,6 +2047,15 @@ function App() {
         mutationPending={mutationPending}
         guildAccessInviteCode={guildAccessInviteCode}
         handleRemoveGuildMember={handleRemoveGuildMember}
+      />
+
+      <AuditLogDialog
+        open={auditLogOpen}
+        onClose={handleCloseAuditLog}
+        guildName={auditLogGuild?.name ?? ''}
+        auditLogs={auditLogs}
+        auditLogLoading={auditLogLoading}
+        auditLogError={auditLogError}
       />
 
       <Dialog open={Boolean(editingEntry)} onClose={() => setEditingEntry(null)}>
@@ -2092,6 +2218,8 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <TutorialOverlay open={tutorialOpen} steps={tutorialSteps} onFinish={handleFinishTutorial} />
     </ThemeProvider>
   )
 }

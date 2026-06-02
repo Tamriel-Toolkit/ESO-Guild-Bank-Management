@@ -313,6 +313,20 @@ describe('auth and guild sharing flows', () => {
     const ownerGuildAfterJoin = ownerSessionAfterJoin.payload.user.guilds.find((guild) => guild.id === guildId)
     assert.equal(ownerGuildAfterJoin.members.some((guildMember) => guildMember.username === 'shared_member'), true)
 
+    const ownerAuditLogs = await owner.request(`/api/guilds/${guildId}/audit-logs`)
+    assert.equal(ownerAuditLogs.response.status, 200)
+    assert.equal(Array.isArray(ownerAuditLogs.payload.auditLogs), true)
+    assert.equal(ownerAuditLogs.payload.auditLogs.some((row) => row.action === 'guild.create'), true)
+    assert.equal(ownerAuditLogs.payload.auditLogs.some((row) => row.action === 'guild.invite_create'), true)
+    assert.equal(ownerAuditLogs.payload.auditLogs.some((row) => row.action === 'guild.invite_redeem'), true)
+    const createAuditRow = ownerAuditLogs.payload.auditLogs.find((row) => row.action === 'guild.create')
+    assert.equal(createAuditRow.actorUsername, 'guild_owner')
+    assert.equal(typeof createAuditRow.createdAt, 'string')
+
+    const memberAuditLogs = await member.request(`/api/guilds/${guildId}/audit-logs`)
+    assert.equal(memberAuditLogs.response.status, 403)
+    assert.equal(memberAuditLogs.payload.error, 'Only guild owners can view this audit history.')
+
     const leaveResult = await member.request(`/api/guilds/${guildId}/membership`, {
       method: 'DELETE',
     })

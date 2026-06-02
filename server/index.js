@@ -354,6 +354,21 @@ const statements = {
     `INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, details)
      VALUES (@actorUserId, @action, @entityType, @entityId, @details)`,
   ),
+    listAuditLogsForGuild: db.prepare(
+     `SELECT audit_logs.id,
+          audit_logs.action,
+          audit_logs.entity_type AS entityType,
+          audit_logs.entity_id AS entityId,
+          audit_logs.details,
+          audit_logs.created_at AS createdAt,
+          users.username AS actorUsername
+      FROM audit_logs
+      LEFT JOIN users ON users.id = audit_logs.actor_user_id
+      WHERE (audit_logs.entity_type = 'guild' AND audit_logs.entity_id = @guildId)
+        OR json_extract(audit_logs.details, '$.guildId') = @guildId
+      ORDER BY audit_logs.created_at DESC, audit_logs.id DESC
+      LIMIT 200`,
+    ),
   createEntry: db.prepare(
     `INSERT INTO entries (id, guild_id, type, amount, is_donation, is_due, withdrawal_category, date, user_name, notes)
      VALUES (@id, @guildId, @type, @amount, @isDonation, @isDue, @withdrawalCategory, @date, @user, @notes)`,
@@ -542,6 +557,26 @@ function writeAuditLog({ actorUserId = null, action, entityType, entityId = null
     entityId: entityId == null ? null : String(entityId),
     details: JSON.stringify(details),
   })
+}
+
+function parseAuditLogDetails(rawDetails) {
+  try {
+    return rawDetails ? JSON.parse(rawDetails) : {}
+  } catch {
+    return {}
+  }
+}
+
+function serializeAuditLog(row) {
+  return {
+    id: row.id,
+    action: row.action,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    actorUsername: row.actorUsername || 'System',
+    createdAt: row.createdAt,
+    details: parseAuditLogDetails(row.details),
+  }
 }
 
 function pruneOldBackups() {
@@ -1283,6 +1318,23 @@ app.post('/api/guilds', requireAuth, (request, response, next) => {
     transaction()
     scheduleBackup('guild-create')
     response.status(201).json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/guilds/:guildId/audit-logs', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    if (guild.ownerUserId !== request.user.id) {
+      throw createHttpError(403, 'Only guild owners can view this audit history.')
+    }
+
+    response.json({
+      auditLogs: statements.listAuditLogsForGuild
+        .all({ guildId: guild.id })
+        .map(serializeAuditLog),
+    })
   } catch (error) {
     next(error)
   }

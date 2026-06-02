@@ -1,11 +1,13 @@
-import { Alert, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemText, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemText, Stack, TextField, Typography } from '@mui/material'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import ExitToAppIcon from '@mui/icons-material/ExitToApp'
 import GroupAddIcon from '@mui/icons-material/GroupAdd'
+import HistoryEduOutlinedIcon from '@mui/icons-material/HistoryEduOutlined'
 
 function GuildProfilesDrawer({
   currentUser,
+  drawerContentRef,
   guildDrawerWidth,
   newGuildName,
   setNewGuildName,
@@ -15,6 +17,7 @@ function GuildProfilesDrawer({
   handleCreateGuild,
   handleRedeemInviteCode,
   mutationPending,
+  handleOpenAuditLog,
   handleOpenGuildAccess,
   handleRenameGuild,
   handleDeleteGuild,
@@ -47,10 +50,11 @@ function GuildProfilesDrawer({
         },
       }}
     >
-      <Typography variant="h6" sx={{ mt: 1 }}>
-        Guild Profiles
-      </Typography>
-      <Stack direction="row" spacing={1} sx={{ my: 2 }}>
+      <Box ref={drawerContentRef}>
+        <Typography variant="h6" sx={{ mt: 1 }}>
+          Guild Profiles
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ my: 2 }}>
         <TextField
           size="small"
           label="New guild"
@@ -70,101 +74,113 @@ function GuildProfilesDrawer({
         >
           Add
         </Button>
-      </Stack>
-      <Stack spacing={1.5} sx={{ mb: 2 }}>
-        <Typography variant="subtitle2">Join Shared Guild</Typography>
-        {settingsInviteError && <Alert severity="error">{settingsInviteError}</Alert>}
-        <TextField
-          size="small"
-          label="Invite code"
-          value={settingsInviteCode}
-          onChange={(event) => setSettingsInviteCode(event.target.value.toUpperCase())}
-          placeholder="ABCD-EF12-3456"
-          fullWidth
-        />
-        <Button variant="outlined" onClick={handleRedeemInviteCode} disabled={mutationPending}>
-          Join guild
-        </Button>
-      </Stack>
-      <Divider sx={{ mb: 1 }} />
-      <List dense>
-        {currentUser.guilds?.map((guild) => (
-          <ListItem
-            key={guild.id}
-            disablePadding
-            secondaryAction={
-              <Stack direction="row" spacing={0.5}>
-                {guild.isOwner && (
-                  <>
+        </Stack>
+        <Stack spacing={1.5} sx={{ mb: 2 }}>
+          <Typography variant="subtitle2">Join Shared Guild</Typography>
+          {settingsInviteError && <Alert severity="error">{settingsInviteError}</Alert>}
+          <TextField
+            size="small"
+            label="Invite code"
+            value={settingsInviteCode}
+            onChange={(event) => setSettingsInviteCode(event.target.value.toUpperCase())}
+            placeholder="ABCD-EF12-3456"
+            fullWidth
+          />
+          <Button variant="outlined" onClick={handleRedeemInviteCode} disabled={mutationPending}>
+            Join guild
+          </Button>
+        </Stack>
+        <Divider sx={{ mb: 1 }} />
+        <List dense>
+          {currentUser.guilds?.map((guild) => (
+            <ListItem
+              key={guild.id}
+              disablePadding
+              secondaryAction={
+                <Stack direction="row" spacing={0.5}>
+                  {guild.isOwner && (
+                    <>
+                      <IconButton
+                        edge="end"
+                        onClick={() => {
+                          handleOpenAuditLog(guild)
+                          if (isMobileLayout) {
+                            setGuildDrawerOpen(false)
+                          }
+                        }}
+                      >
+                        <HistoryEduOutlinedIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        onClick={() => {
+                          handleOpenGuildAccess(guild.id)
+                          if (isMobileLayout) {
+                            setGuildDrawerOpen(false)
+                          }
+                        }}
+                      >
+                        <GroupAddIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        onClick={() => {
+                          handleRenameGuild(guild.id, guild.name)
+                          if (isMobileLayout) {
+                            setGuildDrawerOpen(false)
+                          }
+                        }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        edge="end"
+                        onClick={() => {
+                          handleDeleteGuild(guild.id)
+                          if (isMobileLayout) {
+                            setGuildDrawerOpen(false)
+                          }
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </>
+                  )}
+                  {!guild.isOwner && (
                     <IconButton
                       edge="end"
                       onClick={() => {
-                        handleOpenGuildAccess(guild.id)
+                        handleLeaveGuild(guild)
                         if (isMobileLayout) {
                           setGuildDrawerOpen(false)
                         }
                       }}
+                      disabled={mutationPending}
                     >
-                      <GroupAddIcon fontSize="small" />
+                      <ExitToAppIcon fontSize="small" />
                     </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => {
-                        handleRenameGuild(guild.id, guild.name)
-                        if (isMobileLayout) {
-                          setGuildDrawerOpen(false)
-                        }
-                      }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => {
-                        handleDeleteGuild(guild.id)
-                        if (isMobileLayout) {
-                          setGuildDrawerOpen(false)
-                        }
-                      }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </>
-                )}
-                {!guild.isOwner && (
-                  <IconButton
-                    edge="end"
-                    onClick={() => {
-                      handleLeaveGuild(guild)
-                      if (isMobileLayout) {
-                        setGuildDrawerOpen(false)
-                      }
-                    }}
-                    disabled={mutationPending}
-                  >
-                    <ExitToAppIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Stack>
-            }
-          >
-            <ListItemButton
-              selected={guild.id === currentUser.selectedGuildId}
-              onClick={() => {
-                handleSelectGuild(guild.id)
-                if (isMobileLayout) {
-                  setGuildDrawerOpen(false)
-                }
-              }}
+                  )}
+                </Stack>
+              }
             >
-              <ListItemText
-                primary={guild.name}
-                secondary={`${guild.entries.length} entries${guild.isOwner ? ' • Owner' : ` • Shared by ${guild.ownerUsername}`}`}
-              />
-            </ListItemButton>
-          </ListItem>
-        ))}
-      </List>
+              <ListItemButton
+                selected={guild.id === currentUser.selectedGuildId}
+                onClick={() => {
+                  handleSelectGuild(guild.id)
+                  if (isMobileLayout) {
+                    setGuildDrawerOpen(false)
+                  }
+                }}
+              >
+                <ListItemText
+                  primary={guild.name}
+                  secondary={`${guild.entries.length} entries${guild.isOwner ? ' • Owner' : ` • Shared by ${guild.ownerUsername}`}`}
+                />
+              </ListItemButton>
+            </ListItem>
+          ))}
+        </List>
+      </Box>
     </Drawer>
   )
 }
