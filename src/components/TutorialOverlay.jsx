@@ -71,10 +71,16 @@ function TutorialOverlay({ open, steps, onFinish }) {
 
   useEffect(() => {
     if (!open) {
-      return
+      return undefined
     }
 
-    setActiveStepIndex(0)
+    const resetStepTimeout = window.setTimeout(() => {
+      setActiveStepIndex(0)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(resetStepTimeout)
+    }
   }, [open])
 
   const activeStep = open ? steps[activeStepIndex] : null
@@ -200,7 +206,7 @@ function TutorialOverlay({ open, steps, onFinish }) {
                   setActiveStepIndex((index) => Math.min(index + 1, steps.length - 1))
                 }}
               >
-                {isLastStep ? 'Start using the ledger' : 'Next'}
+                {isLastStep ? 'Start' : 'Next'}
               </Button>
             </Stack>
           </Stack>

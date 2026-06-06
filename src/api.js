@@ -157,6 +157,18 @@ export const updateGuildWeekStartDate = (guildId, weekStartDate) =>
     body: { weekStartDate },
   })
 
+export const updateGuildDueScheme = (guildId, dueScheme) =>
+  apiRequest(`/api/guilds/${guildId}`, {
+    method: 'PATCH',
+    body: { dueScheme },
+  })
+
+export const updateGuildDuesSettings = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
 export const selectGuild = (guildId) =>
   apiRequest(`/api/guilds/${guildId}/select`, {
     method: 'POST',
@@ -188,6 +200,23 @@ export const redeemGuildInvite = (code) =>
 
 export const removeGuildMember = (guildId, memberUserId) =>
   apiRequest(`/api/guilds/${guildId}/members/${memberUserId}`, {
+    method: 'DELETE',
+  })
+
+export const createTrackedMemberForGuild = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateTrackedMemberInGuild = (guildId, trackedMemberId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${trackedMemberId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteTrackedMemberFromGuild = (guildId, trackedMemberId) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${trackedMemberId}`, {
     method: 'DELETE',
   })
 

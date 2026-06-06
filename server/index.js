@@ -83,6 +83,8 @@ db.exec(`
     user_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     week_start_date TEXT NOT NULL,
+    due_scheme TEXT NOT NULL DEFAULT 'monthly',
+    default_dues_amount INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
@@ -109,6 +111,20 @@ db.exec(`
     PRIMARY KEY (guild_id, user_id),
     FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS tracked_members (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    dues_amount INTEGER NOT NULL DEFAULT 0,
+    due_period TEXT NOT NULL DEFAULT 'monthly',
+    dues_day INTEGER NOT NULL DEFAULT 1,
+    uses_default_dues INTEGER NOT NULL DEFAULT 1,
+    dues_exempt INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS guild_invites (
@@ -158,6 +174,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_guilds_user_id ON guilds (user_id);
   CREATE INDEX IF NOT EXISTS idx_entries_guild_id ON entries (guild_id);
   CREATE INDEX IF NOT EXISTS idx_guild_members_user_id ON guild_members (user_id);
+  CREATE INDEX IF NOT EXISTS idx_tracked_members_guild_id ON tracked_members (guild_id);
   CREATE INDEX IF NOT EXISTS idx_guild_invites_guild_id ON guild_invites (guild_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
   CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens (user_id);
@@ -171,7 +188,9 @@ db.prepare(
 
 const guildInviteColumns = db.prepare('PRAGMA table_info(guild_invites)').all()
 const userColumns = db.prepare('PRAGMA table_info(users)').all()
+const guildColumns = db.prepare('PRAGMA table_info(guilds)').all()
 const entryColumns = db.prepare('PRAGMA table_info(entries)').all()
+const trackedMemberColumns = db.prepare('PRAGMA table_info(tracked_members)').all()
 if (!guildInviteColumns.some((column) => column.name === 'single_use')) {
   db.exec('ALTER TABLE guild_invites ADD COLUMN single_use INTEGER NOT NULL DEFAULT 1')
 }
@@ -184,6 +203,12 @@ if (!userColumns.some((column) => column.name === 'email')) {
 if (!userColumns.some((column) => column.name === 'email_verified_at')) {
   db.exec('ALTER TABLE users ADD COLUMN email_verified_at TEXT')
 }
+if (!guildColumns.some((column) => column.name === 'due_scheme')) {
+  db.exec("ALTER TABLE guilds ADD COLUMN due_scheme TEXT NOT NULL DEFAULT 'monthly'")
+}
+if (!guildColumns.some((column) => column.name === 'default_dues_amount')) {
+  db.exec('ALTER TABLE guilds ADD COLUMN default_dues_amount INTEGER NOT NULL DEFAULT 0')
+}
 if (!entryColumns.some((column) => column.name === 'is_donation')) {
   db.exec('ALTER TABLE entries ADD COLUMN is_donation INTEGER NOT NULL DEFAULT 0')
 }
@@ -192,6 +217,25 @@ if (!entryColumns.some((column) => column.name === 'is_due')) {
 }
 if (!entryColumns.some((column) => column.name === 'withdrawal_category')) {
   db.exec("ALTER TABLE entries ADD COLUMN withdrawal_category TEXT NOT NULL DEFAULT ''")
+}
+if (!trackedMemberColumns.some((column) => column.name === 'dues_amount')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN dues_amount INTEGER NOT NULL DEFAULT 0')
+}
+if (!trackedMemberColumns.some((column) => column.name === 'due_period')) {
+  db.exec("ALTER TABLE tracked_members ADD COLUMN due_period TEXT NOT NULL DEFAULT 'monthly'")
+}
+if (!trackedMemberColumns.some((column) => column.name === 'dues_day')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN dues_day INTEGER NOT NULL DEFAULT 1')
+}
+if (!trackedMemberColumns.some((column) => column.name === 'uses_default_dues')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN uses_default_dues INTEGER NOT NULL DEFAULT 1')
+  db.exec('UPDATE tracked_members SET uses_default_dues = 0 WHERE dues_amount > 0')
+}
+if (!trackedMemberColumns.some((column) => column.name === 'is_active')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1')
+}
+if (!trackedMemberColumns.some((column) => column.name === 'dues_exempt')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN dues_exempt INTEGER NOT NULL DEFAULT 0')
 }
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL')
 
@@ -267,6 +311,8 @@ const statements = {
     `SELECT guilds.id,
             guilds.name,
             guilds.week_start_date AS weekStartDate,
+            guilds.due_scheme AS dueScheme,
+            guilds.default_dues_amount AS defaultDuesAmount,
             guilds.created_at AS createdAt,
             guilds.user_id AS ownerUserId,
             owners.username AS ownerUsername
@@ -300,18 +346,35 @@ const statements = {
      WHERE guild_members.guild_id = ?
      ORDER BY isOwner DESC, users.username ASC`,
   ),
+  listTrackedMembersForGuild: db.prepare(
+    `SELECT id,
+            guild_id AS guildId,
+            name,
+            dues_amount AS duesAmount,
+            due_period AS duePeriod,
+            dues_day AS duesDay,
+            uses_default_dues AS useDefaultDues,
+            dues_exempt AS duesExempt,
+            is_active AS isActive,
+            created_at AS createdAt
+     FROM tracked_members
+     WHERE guild_id = ?
+     ORDER BY is_active DESC, LOWER(name) ASC, created_at ASC, id ASC`,
+  ),
   findGuildForUser: db.prepare(
     `SELECT guilds.id,
             guilds.user_id AS ownerUserId,
             guilds.name,
-            guilds.week_start_date AS weekStartDate
+            guilds.week_start_date AS weekStartDate,
+            guilds.due_scheme AS dueScheme,
+            guilds.default_dues_amount AS defaultDuesAmount
      FROM guilds
      JOIN guild_members ON guild_members.guild_id = guilds.id
      WHERE guilds.id = ? AND guild_members.user_id = ?`,
   ),
   createGuild: db.prepare(
-    `INSERT INTO guilds (id, user_id, name, week_start_date)
-     VALUES (@id, @userId, @name, @weekStartDate)`,
+     `INSERT INTO guilds (id, user_id, name, week_start_date, due_scheme, default_dues_amount)
+      VALUES (@id, @userId, @name, @weekStartDate, @dueScheme, @defaultDuesAmount)`,
   ),
   createGuildMember: db.prepare(
     `INSERT OR IGNORE INTO guild_members (guild_id, user_id)
@@ -322,11 +385,47 @@ const statements = {
      FROM guild_members
      WHERE guild_id = ? AND user_id = ?`,
   ),
+  findTrackedMemberForGuild: db.prepare(
+    `SELECT id,
+            guild_id AS guildId,
+            name,
+            dues_amount AS duesAmount,
+            due_period AS duePeriod,
+            dues_day AS duesDay,
+            uses_default_dues AS useDefaultDues,
+            dues_exempt AS duesExempt,
+            is_active AS isActive
+     FROM tracked_members
+     WHERE id = ? AND guild_id = ?`,
+  ),
   deleteGuildMember: db.prepare(
     `DELETE FROM guild_members
      WHERE guild_id = ? AND user_id = ?`,
   ),
+  createTrackedMember: db.prepare(
+    `INSERT INTO tracked_members (id, guild_id, name, dues_amount, due_period, dues_day, uses_default_dues, dues_exempt, is_active)
+     VALUES (@id, @guildId, @name, @duesAmount, @duePeriod, @duesDay, @useDefaultDues, @duesExempt, @isActive)`,
+  ),
+  updateTrackedMember: db.prepare(
+    `UPDATE tracked_members
+     SET name = @name,
+         dues_amount = @duesAmount,
+         due_period = @duePeriod,
+         dues_day = @duesDay,
+         uses_default_dues = @useDefaultDues,
+         dues_exempt = @duesExempt,
+         is_active = @isActive
+     WHERE id = @id AND guild_id = @guildId`,
+  ),
+  deleteTrackedMember: db.prepare('DELETE FROM tracked_members WHERE id = ? AND guild_id = ?'),
   renameGuild: db.prepare('UPDATE guilds SET name = ? WHERE id = ? AND user_id = ?'),
+  updateGuildDueScheme: db.prepare('UPDATE guilds SET due_scheme = ? WHERE id = ? AND user_id = ?'),
+  updateGuildDefaultDuesAmount: db.prepare(
+    'UPDATE guilds SET default_dues_amount = ? WHERE id = ? AND user_id = ?',
+  ),
+  resetTrackedMembersToDefaultForGuild: db.prepare(
+    'UPDATE tracked_members SET uses_default_dues = 1, dues_amount = 0 WHERE guild_id = ?',
+  ),
   updateGuildWeekStartDate: db.prepare(
     'UPDATE guilds SET week_start_date = ? WHERE id = ? AND user_id = ?',
   ),
@@ -893,6 +992,51 @@ function sanitizeWeekStartDate(value) {
   return weekStartDate
 }
 
+function sanitizeDueScheme(value) {
+  return value === 'weekly' ? 'weekly' : 'monthly'
+}
+
+function sanitizeDefaultDuesAmount(value) {
+  const normalizedValue = value === '' || value === null || typeof value === 'undefined' ? 0 : value
+  const defaultDuesAmount = Math.round(Number(normalizedValue))
+
+  if (!Number.isFinite(defaultDuesAmount) || defaultDuesAmount < 0) {
+    throw createHttpError(400, 'Enter a valid default dues amount.')
+  }
+
+  return defaultDuesAmount
+}
+
+function sanitizeTrackedMemberPayload(payload) {
+  const name = sanitizeText(payload?.name, 80)
+  const duesAmount = Math.round(Number(payload?.duesAmount || 0))
+  const useDefaultDues = payload?.useDefaultDues === false ? 0 : 1
+  const duesExempt = payload?.duesExempt === true ? 1 : 0
+  const isActive = payload?.isActive === false ? 0 : 1
+
+  if (!name) {
+    throw createHttpError(400, 'Enter a member name before saving them to the guild roster.')
+  }
+
+  if (!Number.isFinite(duesAmount) || duesAmount < 0) {
+    throw createHttpError(400, 'Enter a valid recurring dues amount.')
+  }
+
+  if (!useDefaultDues && duesAmount <= 0) {
+    throw createHttpError(400, 'Enter a custom dues amount or use the guild default.')
+  }
+
+  return {
+    name,
+    duesAmount: useDefaultDues ? 0 : duesAmount,
+    duePeriod: 'monthly',
+    duesDay: 1,
+    useDefaultDues,
+    duesExempt,
+    isActive,
+  }
+}
+
 function normalizeInviteCode(value) {
   return String(value || '')
     .trim()
@@ -948,10 +1092,19 @@ function serializeUser(userId) {
 
   const guilds = statements.listGuildsForUser.all(userId).map((guild) => ({
     ...guild,
+    dueScheme: guild.dueScheme === 'weekly' ? 'weekly' : 'monthly',
+    defaultDuesAmount: Number(guild.defaultDuesAmount) || 0,
     isOwner: guild.ownerUserId === userId,
     members: statements.listGuildMembersForGuild.all(guild.id).map((member) => ({
       ...member,
       isOwner: Boolean(member.isOwner),
+    })),
+    trackedMembers: statements.listTrackedMembersForGuild.all(guild.id).map((member) => ({
+      ...member,
+      duePeriod: member.duePeriod === 'weekly' ? 'weekly' : 'monthly',
+      useDefaultDues: Boolean(member.useDefaultDues),
+      duesExempt: Boolean(member.duesExempt),
+      isActive: Boolean(member.isActive),
     })),
     entries: statements.listEntriesForGuild.all(guild.id),
   }))
@@ -1292,6 +1445,8 @@ app.post('/api/guilds', requireAuth, (request, response, next) => {
   try {
     const name = sanitizeGuildName(request.body?.name)
     const weekStartDate = sanitizeWeekStartDate(request.body?.weekStartDate || todayString())
+    const dueScheme = sanitizeDueScheme(request.body?.dueScheme)
+    const defaultDuesAmount = sanitizeDefaultDuesAmount(request.body?.defaultDuesAmount)
     const guildId = crypto.randomUUID()
 
     const transaction = db.transaction(() => {
@@ -1300,6 +1455,8 @@ app.post('/api/guilds', requireAuth, (request, response, next) => {
         userId: request.user.id,
         name,
         weekStartDate,
+        dueScheme,
+        defaultDuesAmount,
       })
       statements.createGuildMember.run(guildId, request.user.id)
       writeAuditLog({
@@ -1307,7 +1464,7 @@ app.post('/api/guilds', requireAuth, (request, response, next) => {
         action: 'guild.create',
         entityType: 'guild',
         entityId: guildId,
-        details: { name, weekStartDate },
+        details: { name, weekStartDate, dueScheme, defaultDuesAmount },
       })
 
       if (!request.user.selected_guild_id) {
@@ -1344,6 +1501,8 @@ app.post('/api/guilds/import-guest', requireAuth, (request, response, next) => {
   try {
     const name = sanitizeGuildName(request.body?.name || 'Imported Guest Guild')
     const weekStartDate = sanitizeWeekStartDate(request.body?.weekStartDate || todayString())
+    const dueScheme = sanitizeDueScheme(request.body?.dueScheme)
+    const defaultDuesAmount = sanitizeDefaultDuesAmount(request.body?.defaultDuesAmount)
     const entries = Array.isArray(request.body?.entries) ? request.body.entries : []
 
     const normalizedEntries = entries.map((entry) => ({
@@ -1359,6 +1518,8 @@ app.post('/api/guilds/import-guest', requireAuth, (request, response, next) => {
         userId: request.user.id,
         name,
         weekStartDate,
+        dueScheme,
+        defaultDuesAmount,
       })
       statements.createGuildMember.run(guildId, request.user.id)
 
@@ -1371,7 +1532,7 @@ app.post('/api/guilds/import-guest', requireAuth, (request, response, next) => {
         action: 'guild.import_guest',
         entityType: 'guild',
         entityId: guildId,
-        details: { name, weekStartDate, entryCount: normalizedEntries.length },
+        details: { name, weekStartDate, dueScheme, defaultDuesAmount, entryCount: normalizedEntries.length },
       })
 
       statements.updateUserSelectedGuild.run(guildId, request.user.id)
@@ -1402,8 +1563,21 @@ app.patch('/api/guilds/:guildId', requireAuth, (request, response, next) => {
       updates.push('weekStartDate')
     }
 
+    if (typeof request.body?.dueScheme !== 'undefined') {
+      const dueScheme = sanitizeDueScheme(request.body.dueScheme)
+      statements.updateGuildDueScheme.run(dueScheme, guild.id, request.user.id)
+      updates.push('dueScheme')
+    }
+
+    if (typeof request.body?.defaultDuesAmount !== 'undefined') {
+      const defaultDuesAmount = sanitizeDefaultDuesAmount(request.body.defaultDuesAmount)
+      statements.updateGuildDefaultDuesAmount.run(defaultDuesAmount, guild.id, request.user.id)
+      statements.resetTrackedMembersToDefaultForGuild.run(guild.id)
+      updates.push('defaultDuesAmount')
+    }
+
     if (updates.length === 0) {
-      throw createHttpError(400, 'No guild changes were submitted. Update the guild name or week start date and try again.')
+      throw createHttpError(400, 'No guild changes were submitted. Update the guild name, dues settings, or week start date and try again.')
     }
 
     writeAuditLog({
@@ -1592,6 +1766,95 @@ app.delete('/api/guilds/:guildId/members/:memberUserId', requireAuth, (request, 
 
     transaction()
     scheduleBackup('guild-member-remove')
+    response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/guilds/:guildId/tracked-members', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    const trackedMember = sanitizeTrackedMemberPayload(request.body)
+    const trackedMemberId = crypto.randomUUID()
+
+    statements.createTrackedMember.run({
+      id: trackedMemberId,
+      guildId: guild.id,
+      ...trackedMember,
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'tracked_member.create',
+      entityType: 'tracked_member',
+      entityId: trackedMemberId,
+      details: { guildId: guild.id, ...trackedMember },
+    })
+
+    scheduleBackup('tracked-member-create')
+    response.status(201).json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/guilds/:guildId/tracked-members/:trackedMemberId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    const existingTrackedMember = statements.findTrackedMemberForGuild.get(
+      request.params.trackedMemberId,
+      guild.id,
+    )
+
+    if (!existingTrackedMember) {
+      throw createHttpError(404, 'That tracked member could not be found. Refresh the page and try again.')
+    }
+
+    const trackedMember = sanitizeTrackedMemberPayload(request.body)
+    statements.updateTrackedMember.run({
+      id: request.params.trackedMemberId,
+      guildId: guild.id,
+      ...trackedMember,
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'tracked_member.update',
+      entityType: 'tracked_member',
+      entityId: request.params.trackedMemberId,
+      details: { guildId: guild.id, ...trackedMember },
+    })
+
+    scheduleBackup('tracked-member-update')
+    response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/guilds/:guildId/tracked-members/:trackedMemberId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    const existingTrackedMember = statements.findTrackedMemberForGuild.get(
+      request.params.trackedMemberId,
+      guild.id,
+    )
+
+    if (!existingTrackedMember) {
+      throw createHttpError(404, 'That tracked member could not be found. Refresh the page and try again.')
+    }
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'tracked_member.delete',
+      entityType: 'tracked_member',
+      entityId: request.params.trackedMemberId,
+      details: { guildId: guild.id, name: existingTrackedMember.name },
+    })
+
+    statements.deleteTrackedMember.run(request.params.trackedMemberId, guild.id)
+    scheduleBackup('tracked-member-delete')
     response.json({ user: serializeUser(request.user.id) })
   } catch (error) {
     next(error)

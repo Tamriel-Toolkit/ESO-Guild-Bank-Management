@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   AppBar,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -21,6 +22,7 @@ import {
   Pagination,
   Select,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
@@ -28,6 +30,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  Tabs,
   TextField,
   Toolbar,
   Typography,
@@ -47,9 +50,11 @@ import {
   createEntryForGuild,
   createGuildInvite,
   createGuild,
+  createTrackedMemberForGuild as createTrackedMemberRequest,
   deleteAccount,
   deleteEntryFromGuild,
   deleteGuild,
+  deleteTrackedMemberFromGuild as deleteTrackedMemberRequest,
   getGuildAuditLogs,
   getSession,
   importGuestGuild,
@@ -63,13 +68,16 @@ import {
   renameGuild,
   selectGuild,
   signUp,
+  updateGuildDuesSettings,
   updateRecoveryEmail,
   updateEntryInGuild,
+  updateTrackedMemberInGuild as updateTrackedMemberRequest,
   verifyEmailToken,
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
+import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
 import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
@@ -78,6 +86,7 @@ import PieBreakdownChart from './components/PieBreakdownChart'
 import SettingsDialog from './components/SettingsDialog'
 import Graph from './components/Graph'
 import TutorialOverlay from './components/TutorialOverlay'
+import { buildMemberManagementSnapshot, exportReportBundle } from './reportExports'
 import './App.css'
 
 const LEGACY_STORAGE_KEY = 'eso-guild-bank-management-v1'
@@ -110,6 +119,33 @@ const normalizeEntry = (entry) => ({
   user: entry?.user?.trim?.() ?? '',
   notes: entry?.notes?.trim?.() ?? '',
 })
+
+const normalizeTrackedMember = (member) => ({
+  ...member,
+  name: member?.name?.trim?.() ?? '',
+  duesAmount: Number(member?.duesAmount) || 0,
+  useDefaultDues: member?.useDefaultDues !== false,
+  duesExempt: Boolean(member?.duesExempt),
+  isActive: Boolean(member?.isActive),
+})
+
+const buildMemberSuggestions = (trackedMembers, entries) => {
+  const suggestions = new Set()
+
+  for (const member of trackedMembers ?? []) {
+    if (member?.name?.trim()) {
+      suggestions.add(member.name.trim())
+    }
+  }
+
+  for (const entry of entries ?? []) {
+    if (entry?.user?.trim()) {
+      suggestions.add(entry.user.trim())
+    }
+  }
+
+  return [...suggestions].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: 'base' }))
+}
 
 const readLegacyState = () => {
   try {
@@ -408,13 +444,256 @@ const buildStatisticsRows = (entries, statisticsRange) => {
 const theme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: '#b08a4a' },
-    background: { default: '#11100e', paper: '#1a1714' },
-    secondary: { main: '#8a6a34' },
+    primary: { main: '#c7a15d', light: '#e1c88f', dark: '#8f6a30', contrastText: '#140f09' },
+    secondary: { main: '#8c6f3b', light: '#b89a62', dark: '#5a4421' },
+    background: { default: '#11100e', paper: '#1a1612' },
+    text: { primary: '#f0e6d2', secondary: '#c7b79a' },
+    divider: 'rgba(199, 161, 93, 0.18)',
+    success: { main: '#7ea96c' },
+    warning: { main: '#d5a14d' },
+    error: { main: '#c96d57' },
   },
   typography: {
-    fontFamily: '"Trebuchet MS", "Segoe UI", sans-serif',
-    h4: { letterSpacing: 1 },
+    fontFamily: '"Segoe UI", "Trebuchet MS", sans-serif',
+    h4: {
+      fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+      letterSpacing: 1,
+      fontWeight: 700,
+    },
+    h5: {
+      fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+      letterSpacing: 0.6,
+      fontWeight: 700,
+    },
+    h6: {
+      fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+      letterSpacing: 0.5,
+      fontWeight: 700,
+    },
+    subtitle1: {
+      fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+      fontWeight: 700,
+      letterSpacing: 0.35,
+    },
+    button: {
+      letterSpacing: '0.08em',
+      fontWeight: 700,
+      textTransform: 'none',
+    },
+  },
+  shape: {
+    borderRadius: 14,
+  },
+  components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          colorScheme: 'dark',
+        },
+        '::selection': {
+          backgroundColor: 'rgba(199, 161, 93, 0.28)',
+        },
+      },
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          borderBottom: '1px solid rgba(199, 161, 93, 0.18)',
+          background:
+            'linear-gradient(180deg, rgba(25, 20, 15, 0.9), rgba(17, 14, 11, 0.72))',
+          boxShadow: '0 10px 24px rgba(0, 0, 0, 0.18)',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          position: 'relative',
+          border: '1px solid rgba(199, 161, 93, 0.16)',
+          background:
+            'linear-gradient(180deg, rgba(36, 30, 24, 0.96), rgba(25, 21, 17, 0.94))',
+          boxShadow:
+            'inset 0 1px 0 rgba(255, 236, 196, 0.05), 0 16px 32px rgba(0, 0, 0, 0.22)',
+          backdropFilter: 'blur(10px)',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          border: '1px solid rgba(199, 161, 93, 0.18)',
+          background:
+            'linear-gradient(180deg, rgba(34, 29, 23, 0.98), rgba(21, 18, 14, 0.98))',
+          boxShadow: '0 24px 60px rgba(0, 0, 0, 0.34)',
+        },
+      },
+    },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          borderLeft: '1px solid rgba(199, 161, 93, 0.16)',
+          background:
+            'linear-gradient(180deg, rgba(31, 26, 21, 0.98), rgba(19, 16, 13, 0.98))',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 999,
+          paddingInline: '1rem',
+        },
+        contained: {
+          color: '#140f09',
+          background: 'linear-gradient(180deg, #d8b87b 0%, #b98a42 100%)',
+          boxShadow: '0 10px 18px rgba(0, 0, 0, 0.2)',
+        },
+        outlined: {
+          borderColor: 'rgba(199, 161, 93, 0.3)',
+          backgroundColor: 'rgba(199, 161, 93, 0.05)',
+        },
+        text: {
+          color: '#dfc690',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderColor: 'rgba(199, 161, 93, 0.2)',
+          backgroundColor: 'rgba(199, 161, 93, 0.08)',
+        },
+        filledPrimary: {
+          color: '#f7edd4',
+          textShadow: '0 1px 8px rgba(0, 0, 0, 0.28)',
+        },
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          minHeight: 44,
+          borderBottom: '1px solid rgba(199, 161, 93, 0.16)',
+        },
+        indicator: {
+          height: 3,
+          borderRadius: 999,
+          background: 'linear-gradient(90deg, #7d5b2d, #d9b46f, #7d5b2d)',
+        },
+      },
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          minHeight: 44,
+          color: '#c7b79a',
+          fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          '&.Mui-selected': {
+            color: '#f0ddb2',
+          },
+        },
+      },
+    },
+    MuiTextField: {
+      defaultProps: {
+        variant: 'outlined',
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(255, 247, 233, 0.03)',
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'rgba(199, 161, 93, 0.34)',
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#c7a15d',
+            boxShadow: '0 0 0 3px rgba(199, 161, 93, 0.08)',
+          },
+        },
+        notchedOutline: {
+          borderColor: 'rgba(199, 161, 93, 0.18)',
+        },
+        input: {
+          color: '#f0e6d2',
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: '#bfae8e',
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        icon: {
+          color: '#c7b79a',
+        },
+      },
+    },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: 14,
+        },
+      },
+    },
+    MuiTableHead: {
+      styleOverrides: {
+        root: {
+          background: 'linear-gradient(180deg, rgba(199, 161, 93, 0.09), rgba(199, 161, 93, 0.03))',
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        head: {
+          color: '#e2cca0',
+          fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+          fontWeight: 700,
+          letterSpacing: '0.05em',
+        },
+        body: {
+          borderColor: 'rgba(199, 161, 93, 0.08)',
+        },
+      },
+    },
+    MuiDivider: {
+      styleOverrides: {
+        root: {
+          borderColor: 'rgba(199, 161, 93, 0.14)',
+        },
+      },
+    },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          '&.Mui-selected': {
+            backgroundColor: 'rgba(199, 161, 93, 0.14)',
+          },
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          color: '#d9c08b',
+        },
+      },
+    },
   },
 })
 
@@ -422,10 +701,14 @@ function App() {
   const heroRef = useRef(null)
   const authActionRef = useRef(null)
   const mobileGuildMenuRef = useRef(null)
+  const pageTabsRef = useRef(null)
   const addEntryRef = useRef(null)
   const statisticsRef = useRef(null)
   const graphRef = useRef(null)
   const logEntriesRef = useRef(null)
+  const memberManagementOverviewRef = useRef(null)
+  const memberManagementRosterRef = useRef(null)
+  const memberManagementHistoryRef = useRef(null)
   const guildDrawerRef = useRef(null)
 
   const isMobileLayout = useMediaQuery(theme.breakpoints.down('md'))
@@ -480,7 +763,11 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([])
   const [auditLogLoading, setAuditLogLoading] = useState(false)
   const [auditLogError, setAuditLogError] = useState('')
-
+  const [currentPage, setCurrentPage] = useState('ledger')
+  const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
+  const [exportDialogOpen, setExportDialogOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState('csv')
+  const [exportScope, setExportScope] = useState('ledger')
   const sessionUser = serverUser?.username ?? null
   const currentUser = serverUser
   const selectedGuild =
@@ -488,7 +775,28 @@ function App() {
   const guildAccessGuild =
     currentUser?.guilds?.find((guild) => guild.id === guildAccessGuildId) ?? null
 
-  const activeEntries = sessionUser ? selectedGuild?.entries ?? [] : guestState.entries
+  const activeEntries = useMemo(
+    () => (sessionUser ? selectedGuild?.entries ?? [] : guestState.entries),
+    [guestState.entries, selectedGuild?.entries, sessionUser],
+  )
+  const trackedMembers = useMemo(
+    () => (selectedGuild?.trackedMembers ?? []).map(normalizeTrackedMember),
+    [selectedGuild?.trackedMembers],
+  )
+  const memberSuggestions = useMemo(
+    () => buildMemberSuggestions(trackedMembers, activeEntries),
+    [activeEntries, trackedMembers],
+  )
+  const exportScopeOptions = useMemo(() => {
+    const options = [{ value: 'ledger', label: 'Ledger report' }]
+
+    if (sessionUser && selectedGuild) {
+      options.push({ value: 'member-management', label: 'Member management report' })
+      options.push({ value: 'full', label: 'Full combined report' })
+    }
+
+    return options
+  }, [selectedGuild, sessionUser])
   const legacyUserGuilds = sessionUser ? legacyState?.users?.[sessionUser]?.guilds ?? [] : []
   const hasLegacyData = Boolean(
     legacyState && (legacyState.guest.entries.length > 0 || legacyUserGuilds.length > 0),
@@ -509,6 +817,48 @@ function App() {
           targetRef: authActionRef,
         }
 
+    const pageSpecificSteps =
+      currentPage === 'dues'
+        ? [
+            {
+              title: 'Review Shared Dues Settings',
+              body: 'This overview controls the shared weekly or monthly scheme, the guild default dues amount, and the current cycle totals for the roster.',
+              targetRef: memberManagementOverviewRef,
+            },
+            {
+              title: 'Manage the Member Roster',
+              body: 'Add tracked members here, mark permanent exclusions, toggle active status, and choose whether someone follows the guild default or a custom dues amount.',
+              targetRef: memberManagementRosterRef,
+            },
+            {
+              title: 'Check Payment History',
+              body: 'Use these recent dues and donation tables to verify who has paid, spot missing contributions, and review recent activity without leaving the page.',
+              targetRef: memberManagementHistoryRef,
+            },
+          ]
+        : [
+            {
+              title: 'Add Entries Quickly',
+              body: 'Use this form to record deposits, withdrawals, and sales tax. Assign entries to tracked guild members with autofill suggestions, then classify deposit activity as donations or dues.',
+              targetRef: addEntryRef,
+            },
+            {
+              title: 'Read the Totals',
+              body: 'The statistics table rolls entries into overall, monthly, weekly, and daily views so you can spot changes without scanning the full log.',
+              targetRef: statisticsRef,
+            },
+            {
+              title: 'Explore the Charts',
+              body: 'The graph area gives you toggleable trend lines plus a breakdown chart for deposits and withdrawals. Use the date range above to focus the view.',
+              targetRef: graphRef,
+            },
+            {
+              title: 'Review the Entry Log',
+              body: 'The log is your detailed audit trail. Sort it, page through it, and edit or delete individual entries whenever records need correction.',
+              targetRef: logEntriesRef,
+            },
+          ]
+
     return [
       {
         title: 'Welcome to the Guild Ledger',
@@ -516,28 +866,18 @@ function App() {
         targetRef: heroRef,
       },
       accountStep,
-      {
-        title: 'Add Entries Quickly',
-        body: 'Use this form to record deposits, withdrawals, and sales tax. Deposit toggles classify donations or dues, and withdrawal toggles capture where gold was spent.',
-        targetRef: addEntryRef,
-      },
-      {
-        title: 'Read the Totals',
-        body: 'The statistics table rolls entries into overall, monthly, weekly, and daily views so you can spot changes without scanning the full log.',
-        targetRef: statisticsRef,
-      },
-      {
-        title: 'Explore the Charts',
-        body: 'The graph area gives you toggleable trend lines plus a breakdown chart for deposits and withdrawals. Use the date range above to focus the view.',
-        targetRef: graphRef,
-      },
-      {
-        title: 'Review the Entry Log',
-        body: 'The log is your detailed audit trail. Sort it, page through it, and edit or delete individual entries whenever records need correction.',
-        targetRef: logEntriesRef,
-      },
+      ...(sessionUser
+        ? [
+            {
+              title: 'Switch Between Ledger And Member Management',
+              body: 'Use these tabs to move between transaction tracking and member management. The walkthrough will continue with the tools for whichever page is currently open.',
+              targetRef: pageTabsRef,
+            },
+          ]
+        : []),
+      ...pageSpecificSteps,
     ]
-  }, [isMobileLayout, sessionUser])
+  }, [currentPage, isMobileLayout, sessionUser])
 
   useEffect(() => {
     let isCancelled = false
@@ -549,7 +889,7 @@ function App() {
           setServerUser(response.user)
           setEntryDraft((prev) => ({
             ...prev,
-            user: response.user?.username ?? '',
+            user: '',
           }))
         }
       } catch (error) {
@@ -574,6 +914,13 @@ function App() {
     setTutorialOpen(false)
   }
 
+  const openExportDialog = () => {
+    const defaultScope = currentPage === 'dues' && sessionUser && selectedGuild ? 'member-management' : 'ledger'
+    setExportScope(defaultScope)
+    setExportFormat('csv')
+    setExportDialogOpen(true)
+  }
+
   useEffect(() => {
     if (!sessionUser || !selectedGuild?.id) {
       return
@@ -581,6 +928,12 @@ function App() {
 
     setStatisticsRange(createTodayStatisticsRange())
   }, [sessionUser, selectedGuild?.id])
+
+  useEffect(() => {
+    if (!sessionUser && currentPage !== 'ledger') {
+      setCurrentPage('ledger')
+    }
+  }, [currentPage, sessionUser])
 
   useEffect(() => {
     if (!settingsOpen) {
@@ -834,7 +1187,7 @@ function App() {
     try {
       const response = await createEntryForGuild(selectedGuild.id, entryDraft)
       persistAuthenticatedUser(response.user, 'Entry saved securely.')
-      setEntryDraft({ ...defaultEntryDraft, date: todayString(), user: sessionUser ?? '' })
+      setEntryDraft({ ...defaultEntryDraft, date: todayString(), user: '' })
     } catch (error) {
       handleApiError(error)
     } finally {
@@ -930,7 +1283,7 @@ function App() {
       setServerUser(nextUser)
       setEntryDraft((prev) => ({
         ...prev,
-        user: nextUser.username,
+        user: '',
       }))
       setAuthOpen(false)
       setAuthDraft({ username: '', email: '', password: '' })
@@ -1299,6 +1652,113 @@ function App() {
     }
   }
 
+  const handleCreateTrackedMember = async (draft) => {
+    if (!selectedGuild || !sessionUser) {
+      return false
+    }
+
+    clearMessages()
+    setMutationPending(true)
+    try {
+      const response = await createTrackedMemberRequest(selectedGuild.id, draft)
+      persistAuthenticatedUser(response.user, 'Guild member added to the roster.')
+      return true
+    } catch (error) {
+      handleApiError(error)
+      return false
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const handleUpdateTrackedMember = async (trackedMemberId, draft) => {
+    if (!selectedGuild || !sessionUser) {
+      return false
+    }
+
+    clearMessages()
+    setMutationPending(true)
+    try {
+      const response = await updateTrackedMemberRequest(selectedGuild.id, trackedMemberId, draft)
+      persistAuthenticatedUser(response.user, 'Guild member updated.')
+      return true
+    } catch (error) {
+      handleApiError(error)
+      return false
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const handleDeleteTrackedMember = async (trackedMember) => {
+    if (!selectedGuild || !sessionUser || !trackedMember) {
+      return
+    }
+
+    if (!window.confirm(`Delete ${trackedMember.name} from the tracked member roster?`)) {
+      return
+    }
+
+    clearMessages()
+    setMutationPending(true)
+    try {
+      const response = await deleteTrackedMemberRequest(selectedGuild.id, trackedMember.id)
+      persistAuthenticatedUser(response.user, `${trackedMember.name} was removed from the tracked member roster.`)
+    } catch (error) {
+      handleApiError(error)
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const applyGuildDueSettings = async (guildId, settings) => {
+    clearMessages()
+    setMutationPending(true)
+    try {
+      const response = await updateGuildDuesSettings(guildId, settings)
+      persistAuthenticatedUser(response.user, 'Guild dues settings updated.')
+      return true
+    } catch (error) {
+      handleApiError(error)
+      return false
+    } finally {
+      setMutationPending(false)
+    }
+  }
+
+  const handleConfirmDueSchemeChange = async () => {
+    if (!pendingDueSchemeChange) {
+      return
+    }
+
+    const { guildId, settings } = pendingDueSchemeChange
+    setPendingDueSchemeChange(null)
+    await applyGuildDueSettings(guildId, settings)
+  }
+
+  const handleUpdateGuildDueSettings = async (settings) => {
+    if (!selectedGuild || !sessionUser) {
+      return false
+    }
+
+    const nextDueScheme = settings?.dueScheme
+    if (
+      nextDueScheme &&
+      nextDueScheme !== selectedGuild.dueScheme
+    ) {
+      setPendingDueSchemeChange({
+        guildId: selectedGuild.id,
+        guildName: selectedGuild.name,
+        currentDueScheme: selectedGuild.dueScheme,
+        nextDueScheme,
+        settings,
+      })
+      return false
+    }
+
+    return applyGuildDueSettings(selectedGuild.id, settings)
+  }
+
   const handleStatisticsRangeChange = (field, value) => {
     setStatisticsRange((prev) => {
       const nextRange = {
@@ -1371,6 +1831,35 @@ function App() {
     }
   }
 
+  const handleExportReport = () => {
+    const guildName = selectedGuild?.name || 'Guest Ledger'
+
+    if ((exportScope === 'member-management' || exportScope === 'full') && (!sessionUser || !selectedGuild)) {
+      setGlobalError('Choose a guild before exporting member management reports.')
+      setGlobalNotice('')
+      return
+    }
+
+    exportReportBundle({
+      format: exportFormat,
+      reportKind: exportScope,
+      guildName,
+      ledgerData: {
+        statisticsRows,
+        entries: sortedEntries,
+      },
+      memberManagementData: buildMemberManagementSnapshot({
+        entries: activeEntries,
+        trackedMembers,
+        selectedGuild,
+      }),
+    })
+
+    setExportDialogOpen(false)
+    setGlobalError('')
+    setGlobalNotice(`${exportScopeOptions.find((option) => option.value === exportScope)?.label || 'Report'} exported as ${exportFormat.toUpperCase()}.`)
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -1416,7 +1905,14 @@ function App() {
                   label={`Logged in: ${sessionUser}`}
                   color="primary"
                   size="small"
-                  sx={{ maxWidth: { xs: '100%', sm: 280 } }}
+                  sx={{
+                    maxWidth: { xs: '100%', sm: 280 },
+                    color: '#f7edd4',
+                    '& .MuiChip-label': {
+                      color: '#f7edd4',
+                      textShadow: '0 1px 8px rgba(0, 0, 0, 0.28)',
+                    },
+                  }}
                 />
                 <IconButton color="inherit" onClick={() => setSettingsOpen(true)} disabled={mutationPending}>
                   <SettingsIcon />
@@ -1440,14 +1936,50 @@ function App() {
 
         <Box sx={{ display: 'flex' }}>
           <Box sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}>
-            <Box ref={heroRef}>
-              <Typography variant="h4" gutterBottom>
-                Track Guild Gold Flow
+            <Box ref={heroRef} className="eso-hero-banner">
+              <Typography variant="overline" className="eso-hero-kicker">
+                Elder Scrolls Online Guild Ledger
               </Typography>
-              <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary' }}>
-                Log deposits, withdrawals, and sales tax income with editable notes.
+              <Typography variant="h4" gutterBottom className="eso-hero-title">
+                {currentPage === 'ledger' ? 'Track Guild Gold Flow' : 'Member Management'}
+              </Typography>
+              <Typography variant="body1" className="eso-hero-subtitle">
+                {currentPage === 'ledger'
+                  ? 'Log deposits, withdrawals, and sales tax income with member-aware notes and suggestions.'
+                  : 'Manage tracked guild members, shared dues settings, and contribution history in one place.'}
               </Typography>
             </Box>
+
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={2}
+              justifyContent="space-between"
+              alignItems={{ xs: 'stretch', md: 'center' }}
+              sx={{ mb: 3 }}
+            >
+              {sessionUser ? (
+                <Tabs
+                  ref={pageTabsRef}
+                  value={currentPage}
+                  onChange={(_event, value) => setCurrentPage(value)}
+                  sx={{ minHeight: 48 }}
+                >
+                  <Tab value="ledger" label="Ledger" />
+                  <Tab value="dues" label="Member Management" />
+                </Tabs>
+              ) : (
+                <Box />
+              )}
+
+              <Button
+                variant="outlined"
+                onClick={openExportDialog}
+                disabled={mutationPending || (sessionUser && !selectedGuild)}
+                sx={{ alignSelf: { xs: 'stretch', md: 'center' } }}
+              >
+                Export Reports
+              </Button>
+            </Stack>
 
             <Stack spacing={2} sx={{ mb: 3 }}>
               {sessionLoading && <Alert severity="info">Restoring your secure session...</Alert>}
@@ -1509,6 +2041,8 @@ function App() {
               )}
             </Stack>
 
+            {currentPage === 'ledger' && (
+              <>
             <Card ref={addEntryRef} sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
@@ -1561,13 +2095,20 @@ function App() {
                       }
                       InputLabelProps={{ shrink: true }}
                     />
-                    <TextField
+                    <Autocomplete
+                      freeSolo
                       fullWidth
-                      label="User"
+                      options={memberSuggestions}
                       value={entryDraft.user}
-                      onChange={(event) =>
-                        setEntryDraft((prev) => ({ ...prev, user: event.target.value }))
+                      onInputChange={(_event, value) =>
+                        setEntryDraft((prev) => ({ ...prev, user: value }))
                       }
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Member"
+                        />
+                      )}
                     />
                     <TextField
                       fullWidth
@@ -1741,12 +2282,12 @@ function App() {
                                 {statisticsRow.topDonors?.length ? (
                                   statisticsRow.topDonors.map((donor) => (
                                     <Typography key={`${statisticsRow.label}-${donor.rank}-${donor.username}`} variant="caption" color="text.secondary">
-                                      {`#${donor.rank} donor: ${donor.username} (${fmtGold(donor.amount)})`}
+                                      {`#${donor.rank} contributing member: ${donor.username} (${fmtGold(donor.amount)})`}
                                     </Typography>
                                   ))
                                 ) : (
                                   <Typography variant="caption" color="text.secondary">
-                                    Top donors: No donation deposits recorded
+                                    Top contributing members: No donation deposits recorded
                                   </Typography>
                                 )}
                               </Stack>
@@ -1860,7 +2401,7 @@ function App() {
                             direction={entrySort.column === 'user' ? entrySort.direction : 'asc'}
                             onClick={() => handleEntrySort('user')}
                           >
-                            User
+                            Member
                           </TableSortLabel>
                         </TableCell>
                         <TableCell
@@ -1939,6 +2480,25 @@ function App() {
                 </TableContainer>
               </CardContent>
             </Card>
+              </>
+            )}
+
+            {currentPage === 'dues' && sessionUser && (
+              <DuesDashboardPage
+                selectedGuild={selectedGuild}
+                entries={activeEntries}
+                trackedMembers={trackedMembers}
+                overviewRef={memberManagementOverviewRef}
+                rosterRef={memberManagementRosterRef}
+                historyRef={memberManagementHistoryRef}
+                mutationPending={mutationPending}
+                onUpdateGuildDuesSettings={handleUpdateGuildDueSettings}
+                onCreateTrackedMember={handleCreateTrackedMember}
+                onUpdateTrackedMember={handleUpdateTrackedMember}
+                onDeleteTrackedMember={handleDeleteTrackedMember}
+                fmtGold={fmtGold}
+              />
+            )}
           </Box>
 
           {sessionUser && (
@@ -1965,8 +2525,6 @@ function App() {
               setGuildDrawerOpen={setGuildDrawerOpen}
             />
           )}
-
-          {sessionUser && !isMobileLayout && <Box sx={{ width: guildDrawerWidth, flexShrink: 0 }} />}
         </Box>
       </Box>
 
@@ -2058,6 +2616,100 @@ function App() {
         auditLogError={auditLogError}
       />
 
+      <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Export Reports</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Choose whether to export ledger activity, member management, or a combined full report, then pick CSV or PDF.
+            </Typography>
+            <FormControl fullWidth>
+              <InputLabel id="export-scope-label">Report selection</InputLabel>
+              <Select
+                labelId="export-scope-label"
+                label="Report selection"
+                value={exportScope}
+                onChange={(event) => setExportScope(event.target.value)}
+              >
+                {exportScopeOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel id="export-format-label">File format</InputLabel>
+              <Select
+                labelId="export-format-label"
+                label="File format"
+                value={exportFormat}
+                onChange={(event) => setExportFormat(event.target.value)}
+              >
+                <MenuItem value="csv">CSV</MenuItem>
+                <MenuItem value="pdf">PDF</MenuItem>
+              </Select>
+            </FormControl>
+            <Alert severity="info" variant="outlined">
+              {exportScope === 'ledger'
+                ? 'Ledger exports include the statistics rollup and the full entry log for the selected guild or guest ledger.'
+                : exportScope === 'member-management'
+                  ? 'Member management exports include shared dues settings, roster status, and recent dues and donation history.'
+                  : 'Full combined exports bundle both the ledger report and member management report into one file.'}
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleExportReport}>
+            Export {exportFormat.toUpperCase()}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDueSchemeChange)}
+        onClose={() => setPendingDueSchemeChange(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          Confirm Dues Scheme Change
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body1">
+              Switch <strong>{pendingDueSchemeChange?.guildName || 'this guild'}</strong> from{' '}
+              {pendingDueSchemeChange?.currentDueScheme || 'monthly'} to{' '}
+              {pendingDueSchemeChange?.nextDueScheme || 'weekly'} dues?
+            </Typography>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <Chip
+                label={`Current: ${pendingDueSchemeChange?.currentDueScheme || 'monthly'}`}
+                variant="outlined"
+              />
+              <Chip
+                label={`New: ${pendingDueSchemeChange?.nextDueScheme || 'weekly'}`}
+                color="warning"
+              />
+            </Stack>
+            <Alert severity="warning" variant="outlined">
+              Current dues recorded for this{' '}
+              {pendingDueSchemeChange?.currentDueScheme === 'weekly' ? 'week' : 'month'} may be overridden when the scheme changes.
+            </Alert>
+            <Typography variant="body2" color="text.secondary">
+              Use this when you are ready to reset the guild onto one shared cadence.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setPendingDueSchemeChange(null)}>Keep Current Scheme</Button>
+          <Button variant="contained" color="warning" disabled={mutationPending} onClick={handleConfirmDueSchemeChange}>
+            Switch Scheme
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={Boolean(editingEntry)} onClose={() => setEditingEntry(null)}>
         <DialogTitle>Edit Entry</DialogTitle>
         <DialogContent>
@@ -2104,12 +2756,14 @@ function App() {
                 }
                 InputLabelProps={{ shrink: true }}
               />
-              <TextField
-                label="User"
+              <Autocomplete
+                freeSolo
+                options={memberSuggestions}
                 value={editingEntry.user || ''}
-                onChange={(event) =>
-                  setEditingEntry((prev) => ({ ...prev, user: event.target.value }))
+                onInputChange={(_event, value) =>
+                  setEditingEntry((prev) => ({ ...prev, user: value }))
                 }
+                renderInput={(params) => <TextField {...params} label="Member" />}
               />
               <TextField
                 label="Notes"

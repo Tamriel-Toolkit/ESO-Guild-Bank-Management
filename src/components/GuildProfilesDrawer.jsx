@@ -165,6 +165,7 @@ function GuildProfilesDrawer({
             >
               <ListItemButton
                 selected={guild.id === currentUser.selectedGuildId}
+                sx={{ pr: guild.isOwner ? 22 : 8 }}
                 onClick={() => {
                   handleSelectGuild(guild.id)
                   if (isMobileLayout) {

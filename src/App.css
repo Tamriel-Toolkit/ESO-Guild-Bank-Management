@@ -2,3 +2,92 @@
   background: radial-gradient(circle at top, rgba(176, 138, 74, 0.18), transparent 50%),
     linear-gradient(180deg, #15120f 0%, #0f0d0b 100%);
 }
+
+.eso-hero-banner {
+  position: relative;
+  margin-bottom: 1.75rem;
+  padding: 1.25rem 1.5rem 1.4rem;
+  border: 1px solid rgba(176, 138, 74, 0.26);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(176, 138, 74, 0.08), rgba(255, 240, 204, 0.03) 35%, rgba(0, 0, 0, 0.05) 100%),
+    linear-gradient(180deg, rgba(34, 28, 22, 0.9), rgba(20, 16, 13, 0.86));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 196, 0.08),
+    0 16px 34px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.eso-hero-banner::before,
+.eso-hero-banner::after {
+  content: '';
+  position: absolute;
+  left: 1.5rem;
+  right: 1.5rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(176, 138, 74, 0.65), transparent);
+}
+
+.eso-hero-banner::before {
+  top: 0.7rem;
+}
+
+.eso-hero-banner::after {
+  bottom: 0.7rem;
+}
+
+.eso-hero-kicker {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #d5be8a;
+  letter-spacing: 0.24em;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.eso-hero-title {
+  margin-bottom: 0.5rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  color: #f1dfb1;
+  text-shadow:
+    0 1px 0 rgba(255, 245, 217, 0.28),
+    0 10px 24px rgba(0, 0, 0, 0.42);
+  background: linear-gradient(180deg, #fff1c2 0%, #ddb464 46%, #fff4d4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.eso-hero-subtitle {
+  max-width: 50rem;
+  margin-bottom: 0;
+  color: rgba(229, 220, 196, 0.92);
+  letter-spacing: 0.025em;
+  line-height: 1.7;
+  text-wrap: balance;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.32);
+}
+
+@media (max-width: 600px) {
+  .eso-hero-banner {
+    padding: 1rem 1rem 1.15rem;
+    border-radius: 14px;
+  }
+
+  .eso-hero-banner::before,
+  .eso-hero-banner::after {
+    left: 1rem;
+    right: 1rem;
+  }
+
+  .eso-hero-kicker {
+    letter-spacing: 0.16em;
+  }
+
+  .eso-hero-title {
+    letter-spacing: 0.05em;
+  }
+}

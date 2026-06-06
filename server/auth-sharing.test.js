@@ -509,4 +509,86 @@ describe('auth and guild sharing flows', () => {
       'That invite code is not valid anymore. It may be incorrect, expired, or already used.',
     )
   })
+
+  it('persists tracked guild members with recurring dues fields', async () => {
+    const owner = new SessionClient()
+
+    const ownerSignUp = await owner.request('/api/auth/signup', {
+      method: 'POST',
+      body: { username: 'dues_owner', email: 'dues_owner@example.com', password: 'password1234' },
+    })
+    assert.equal(ownerSignUp.response.status, 201)
+
+    const guildCreate = await owner.request('/api/guilds', {
+      method: 'POST',
+      body: { name: 'Dues Guild', weekStartDate: '2026-05-31', dueScheme: 'weekly', defaultDuesAmount: 2500 },
+    })
+    assert.equal(guildCreate.response.status, 201)
+    const guildId = guildCreate.payload.user.selectedGuildId
+    const createdGuildFromCreate = guildCreate.payload.user.guilds.find((guild) => guild.id === guildId)
+    assert.equal(createdGuildFromCreate.dueScheme, 'weekly')
+    assert.equal(createdGuildFromCreate.defaultDuesAmount, 2500)
+
+    const createTrackedMember = await owner.request(`/api/guilds/${guildId}/tracked-members`, {
+      method: 'POST',
+      body: {
+        name: 'Member One',
+        duesAmount: 0,
+        useDefaultDues: true,
+        duesExempt: true,
+        isActive: true,
+      },
+    })
+    assert.equal(createTrackedMember.response.status, 201)
+
+    const createdGuild = createTrackedMember.payload.user.guilds.find((guild) => guild.id === guildId)
+    assert.equal(createdGuild.trackedMembers.length, 1)
+    assert.equal(createdGuild.trackedMembers[0].name, 'Member One')
+    assert.equal(createdGuild.trackedMembers[0].duesAmount, 0)
+    assert.equal(createdGuild.trackedMembers[0].useDefaultDues, true)
+    assert.equal(createdGuild.trackedMembers[0].duesExempt, true)
+    assert.equal(createdGuild.trackedMembers[0].isActive, true)
+
+    const updateGuild = await owner.request(`/api/guilds/${guildId}`, {
+      method: 'PATCH',
+      body: { dueScheme: 'monthly', defaultDuesAmount: 3200 },
+    })
+    assert.equal(updateGuild.response.status, 200)
+    const guildAfterSchemeUpdate = updateGuild.payload.user.guilds.find((guild) => guild.id === guildId)
+    assert.equal(guildAfterSchemeUpdate.dueScheme, 'monthly')
+    assert.equal(guildAfterSchemeUpdate.defaultDuesAmount, 3200)
+    assert.equal(guildAfterSchemeUpdate.trackedMembers[0].useDefaultDues, true)
+
+    const trackedMemberId = createdGuild.trackedMembers[0].id
+    const updateTrackedMember = await owner.request(
+      `/api/guilds/${guildId}/tracked-members/${trackedMemberId}`,
+      {
+        method: 'PATCH',
+        body: {
+          name: 'Member One Updated',
+          duesAmount: 3000,
+          useDefaultDues: false,
+          duesExempt: false,
+          isActive: false,
+        },
+      },
+    )
+    assert.equal(updateTrackedMember.response.status, 200)
+
+    const updatedGuild = updateTrackedMember.payload.user.guilds.find((guild) => guild.id === guildId)
+    assert.equal(updatedGuild.trackedMembers[0].name, 'Member One Updated')
+    assert.equal(updatedGuild.trackedMembers[0].duesAmount, 3000)
+    assert.equal(updatedGuild.trackedMembers[0].useDefaultDues, false)
+    assert.equal(updatedGuild.trackedMembers[0].duesExempt, false)
+    assert.equal(updatedGuild.trackedMembers[0].isActive, false)
+
+    const deleteTrackedMember = await owner.request(
+      `/api/guilds/${guildId}/tracked-members/${trackedMemberId}`,
+      { method: 'DELETE' },
+    )
+    assert.equal(deleteTrackedMember.response.status, 200)
+
+    const guildAfterDelete = deleteTrackedMember.payload.user.guilds.find((guild) => guild.id === guildId)
+    assert.equal(guildAfterDelete.trackedMembers.length, 0)
+  })
 })
