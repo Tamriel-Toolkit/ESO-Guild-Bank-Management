@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLedgerBreakdownSections, getTopDonorRows, summarizeLedgerEntries } from './reportExports'
+import { buildLedgerBreakdownSections, getOverallCurrentGold, getTopDonorRows, summarizeLedgerEntries } from './reportExports'
 
 describe('reportExports helpers', () => {
   it('summarizes ledger totals for the selected export range', () => {
@@ -36,6 +36,16 @@ describe('reportExports helpers', () => {
       { rank: 1, username: 'Aela', amount: 500 },
       { rank: 2, username: 'Brina', amount: 250 },
     ])
+  })
+
+  it('computes overall current gold from the full ledger regardless of export range', () => {
+    expect(
+      getOverallCurrentGold([
+        { type: 'deposit', amount: 1200 },
+        { type: 'salesTax', amount: 300 },
+        { type: 'withdrawal', amount: 450 },
+      ]),
+    ).toBe(1050)
   })
 
   it('creates appended breakdown sections for smaller current periods', () => {

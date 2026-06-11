@@ -96,6 +96,8 @@ export const summarizeLedgerEntries = (entries) => {
   }
 }
 
+export const getOverallCurrentGold = (entries) => summarizeLedgerEntries(entries).netTotal
+
 export const getTopDonorRows = (entries, limit = 5) => {
   const donorTotals = entries.reduce((totals, entry) => {
     if (entry.type !== 'deposit' || !entry.isDonation) {
@@ -189,7 +191,7 @@ const downloadCsv = (content, fileName) => {
   downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8' }), fileName)
 }
 
-const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, entries, period, range }) => {
+const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, entries, period, range, currentGold }) => {
   const summary = summarizeLedgerEntries(entries)
   const topDonors = getTopDonorRows(entries)
   const breakdowns = [
@@ -209,6 +211,7 @@ const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, en
       rows: [
         ['Guild', guildName],
         ['Generated', generatedAt],
+        ['Overall current gold', fmtGold(currentGold)],
         ['Ledger period', getLedgerPeriodLabel(period)],
         ['Selected range', formatDisplayDateRange(range.startDate, range.endDate)],
         ['Entry count', entries.length],
@@ -218,6 +221,7 @@ const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, en
       title: `${title} Summary`,
       headers: ['Metric', 'Value'],
       rows: [
+        ['Overall current gold', fmtGold(currentGold)],
         ['Gross income', fmtGold(summary.grossIncome)],
         ['Net total', fmtGold(summary.netTotal)],
         ['Deposits', fmtGold(summary.deposits)],
@@ -249,13 +253,14 @@ const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, en
   ]
 }
 
-const buildMemberManagementSections = ({ title, guildName, generatedAt, snapshot }) => [
+const buildMemberManagementSections = ({ title, guildName, generatedAt, snapshot, currentGold }) => [
   {
     title: `${title} Metadata`,
     headers: ['Field', 'Value'],
     rows: [
       ['Guild', guildName],
       ['Generated', generatedAt],
+      ['Overall current gold', fmtGold(currentGold)],
       ['Dues scheme', snapshot.duesScheme],
       ['Current cycle', snapshot.currentCycle.label],
       ['Default dues amount', toGold(snapshot.defaultDuesAmount)],
@@ -420,6 +425,7 @@ export const exportReportBundle = ({
       entries: ledgerData.entries,
       period: ledgerData.period,
       range: ledgerData.range,
+      currentGold: ledgerData.currentGold,
     }))
 
     if (ledgerData.breakdowns?.length > 1) {
@@ -440,6 +446,7 @@ export const exportReportBundle = ({
       guildName: normalizedGuildName,
       generatedAt,
       snapshot: memberManagementData,
+      currentGold: ledgerData?.currentGold ?? 0,
     }))
   }
 

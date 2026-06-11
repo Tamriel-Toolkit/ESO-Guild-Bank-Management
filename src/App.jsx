@@ -88,7 +88,7 @@ import PieBreakdownChart from './components/PieBreakdownChart'
 import SettingsDialog from './components/SettingsDialog'
 import Graph from './components/Graph'
 import TutorialOverlay from './components/TutorialOverlay'
-import { exportReportBundle } from './reportExports'
+import { exportReportBundle, getOverallCurrentGold } from './reportExports'
 import { formatDisplayDate } from './utils/dateFormatting'
 import { applyLedgerFilters, defaultLedgerFilters, getLedgerSavedViewScope, hasActiveLedgerFilters } from './utils/ledgerFilters'
 import { buildMemberManagementSnapshot } from './utils/memberDues'
@@ -2183,6 +2183,7 @@ function App() {
 
   const handleExportReport = () => {
     const guildName = selectedGuild?.name || 'Guest Ledger'
+    const overallCurrentGold = getOverallCurrentGold(activeEntries)
     const exportBreakdowns = exportIncludesLedger
       ? buildLedgerExportBreakdowns({
           entries: activeEntries,
@@ -2210,6 +2211,7 @@ function App() {
         ),
         period: exportPeriod,
         range: selectedExportBreakdown?.range ?? resolveStatisticsRange(exportRange),
+        currentGold: overallCurrentGold,
         breakdowns: exportBreakdowns.map((breakdown) => ({
           ...breakdown,
           entries: [...breakdown.entries].sort((leftEntry, rightEntry) =>
