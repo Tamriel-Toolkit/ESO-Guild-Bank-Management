@@ -55,7 +55,14 @@ function Graph({ entries, statisticsRange }) {
         return points
     }, new Map())
 
-    const chartRows = [...pointsByDate.values()]
+    const chartRows = [...pointsByDate.values()].reduce((rows, row) => {
+        const previousNet = rows.length > 0 ? rows[rows.length - 1].net : 0
+        rows.push({
+            ...row,
+            net: previousNet + row.net,
+        })
+        return rows
+    }, [])
     const activeSeries = seriesOptions
         .filter((seriesOption) => visibleSeries[seriesOption.id])
         .map((seriesOption) => ({

@@ -348,6 +348,24 @@ const createTodayStatisticsRange = () => ({
   endDate: todayString(),
 })
 
+const createCurrentWeekStatisticsRange = (baseDate = todayString()) => {
+  const day = isoToDay(baseDate)
+
+  return {
+    startDate: dayToIso(startOfWeek(day)),
+    endDate: dayToIso(endOfWeek(day)),
+  }
+}
+
+const createCurrentMonthStatisticsRange = (baseDate = todayString()) => {
+  const day = isoToDay(baseDate)
+
+  return {
+    startDate: dayToIso(startOfMonth(day)),
+    endDate: dayToIso(endOfMonth(day)),
+  }
+}
+
 const createAllStatisticsRange = (entries) => {
   const entryDates = entries
     .map((entry) => entry.date)
@@ -363,6 +381,109 @@ const createAllStatisticsRange = (entries) => {
     endDate: entryDates[entryDates.length - 1],
   }
 }
+
+const ledgerExportPeriodOptions = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'overall', label: 'Overall' },
+]
+
+const createLedgerExportRange = (period, entries) => {
+  if (period === 'daily') {
+    return createTodayStatisticsRange()
+  }
+
+  if (period === 'weekly') {
+    return createCurrentWeekStatisticsRange()
+  }
+
+  if (period === 'monthly') {
+    return createCurrentMonthStatisticsRange()
+  }
+
+  return createAllStatisticsRange(entries)
+}
+
+const getStatisticsSectionForExportPeriod = (period) => {
+  if (period === 'daily') {
+    return 'Daily'
+  }
+
+  if (period === 'weekly') {
+    return 'Weekly'
+  }
+
+  if (period === 'monthly') {
+    return 'Monthly'
+  }
+
+  return 'Overall'
+}
+
+const filterStatisticsRowsForExportPeriod = (rows, period) => {
+  const section = getStatisticsSectionForExportPeriod(period)
+
+  return rows.filter((row) => row.section === section)
+}
+
+const getSupplementalLedgerExportPeriods = (period) => {
+  if (period === 'weekly') {
+    return ['daily']
+  }
+
+  if (period === 'monthly') {
+    return ['weekly', 'daily']
+  }
+
+  if (period === 'overall') {
+    return ['monthly', 'weekly', 'daily']
+  }
+
+  return []
+}
+
+const buildLedgerExportEntries = (entries, ledgerFilters, range) =>
+  applyLedgerFilters(entries, {
+    ...ledgerFilters,
+    startDate: range.startDate,
+    endDate: range.endDate,
+  })
+
+const buildLedgerExportBreakdowns = ({ entries, ledgerFilters, selectedPeriod, selectedRange }) => {
+  const normalizedSelectedRange = resolveStatisticsRange(selectedRange)
+  const selectedEntries = buildLedgerExportEntries(entries, ledgerFilters, normalizedSelectedRange)
+  const breakdowns = [
+    {
+      title: `${getLedgerExportPeriodLabel(selectedPeriod)} breakdown`,
+      period: selectedPeriod,
+      range: normalizedSelectedRange,
+      entries: selectedEntries,
+      statisticsRows: filterStatisticsRowsForExportPeriod(
+        buildStatisticsRows(selectedEntries, normalizedSelectedRange),
+        selectedPeriod,
+      ),
+    },
+  ]
+
+  for (const period of getSupplementalLedgerExportPeriods(selectedPeriod)) {
+    const range = resolveStatisticsRange(createLedgerExportRange(period, entries))
+    const periodEntries = buildLedgerExportEntries(entries, ledgerFilters, range)
+
+    breakdowns.push({
+      title: `Current ${getLedgerExportPeriodLabel(period)} snapshot`,
+      period,
+      range,
+      entries: periodEntries,
+      statisticsRows: filterStatisticsRowsForExportPeriod(buildStatisticsRows(periodEntries, range), period),
+    })
+  }
+
+  return breakdowns
+}
+
+const getLedgerExportPeriodLabel = (period) =>
+  ledgerExportPeriodOptions.find((option) => option.value === period)?.label ?? 'Overall'
 
 const createCollapsedStatisticsSections = () => ({
   Daily: false,
@@ -786,6 +907,8 @@ function App() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
   const [exportScope, setExportScope] = useState('ledger')
+  const [exportPeriod, setExportPeriod] = useState('overall')
+  const [exportRange, setExportRange] = useState(createTodayStatisticsRange)
   const sessionUser = serverUser?.username ?? null
   const currentUser = serverUser
   const selectedGuild =
@@ -795,7 +918,6 @@ function App() {
   const ledgerSavedViewScope = getLedgerSavedViewScope({ sessionUser, guildId: selectedGuild?.id })
   const scopedSavedLedgerViews = savedLedgerViews[ledgerSavedViewScope] ?? []
   const canEditSelectedGuild = !sessionUser || Boolean(selectedGuild?.canEdit)
-  const canManageSelectedGuildPermissions = Boolean(selectedGuild?.canManagePermissions)
 
   const activeEntries = useMemo(
     () => (sessionUser ? selectedGuild?.entries ?? [] : guestState.entries),
@@ -837,6 +959,7 @@ function App() {
 
     return options
   }, [selectedGuild, sessionUser])
+  const exportIncludesLedger = exportScope === 'ledger' || exportScope === 'full'
   const legacyUserGuilds = sessionUser ? legacyState?.users?.[sessionUser]?.guilds ?? [] : []
   const hasLegacyData = Boolean(
     legacyState && (legacyState.guest.entries.length > 0 || legacyUserGuilds.length > 0),
@@ -964,8 +1087,11 @@ function App() {
 
   const openExportDialog = () => {
     const defaultScope = currentPage !== 'ledger' && sessionUser && selectedGuild ? 'member-management' : 'ledger'
+    const defaultPeriod = 'overall'
     setExportScope(defaultScope)
     setExportFormat('csv')
+    setExportPeriod(defaultPeriod)
+    setExportRange(createLedgerExportRange(defaultPeriod, activeEntries))
     setExportDialogOpen(true)
   }
 
@@ -2057,6 +2183,15 @@ function App() {
 
   const handleExportReport = () => {
     const guildName = selectedGuild?.name || 'Guest Ledger'
+    const exportBreakdowns = exportIncludesLedger
+      ? buildLedgerExportBreakdowns({
+          entries: activeEntries,
+          ledgerFilters,
+          selectedPeriod: exportPeriod,
+          selectedRange: exportRange,
+        })
+      : []
+    const selectedExportBreakdown = exportBreakdowns[0] ?? null
 
     if ((exportScope === 'member-management' || exportScope === 'full') && (!sessionUser || !selectedGuild)) {
       setGlobalError('Choose a guild before exporting members and dues reports.')
@@ -2069,8 +2204,18 @@ function App() {
       reportKind: exportScope,
       guildName,
       ledgerData: {
-        statisticsRows,
-        entries: sortedEntries,
+        statisticsRows: selectedExportBreakdown?.statisticsRows ?? [],
+        entries: [...(selectedExportBreakdown?.entries ?? [])].sort((leftEntry, rightEntry) =>
+          rightEntry.date.localeCompare(leftEntry.date),
+        ),
+        period: exportPeriod,
+        range: selectedExportBreakdown?.range ?? resolveStatisticsRange(exportRange),
+        breakdowns: exportBreakdowns.map((breakdown) => ({
+          ...breakdown,
+          entries: [...breakdown.entries].sort((leftEntry, rightEntry) =>
+            rightEntry.date.localeCompare(leftEntry.date),
+          ),
+        })),
       },
       memberManagementData: buildMemberManagementSnapshot({
         entries: activeEntries,
@@ -2081,7 +2226,9 @@ function App() {
 
     setExportDialogOpen(false)
     setGlobalError('')
-    setGlobalNotice(`${exportScopeOptions.find((option) => option.value === exportScope)?.label || 'Report'} exported as ${exportFormat.toUpperCase()}.`)
+    setGlobalNotice(
+      `${exportScopeOptions.find((option) => option.value === exportScope)?.label || 'Report'}${exportIncludesLedger ? ` (${getLedgerExportPeriodLabel(exportPeriod)})` : ''} exported as ${exportFormat.toUpperCase()}.`,
+    )
   }
 
   return (
@@ -3070,6 +3217,57 @@ function App() {
                 ))}
               </Select>
             </FormControl>
+            {exportIncludesLedger && (
+              <>
+                <FormControl fullWidth>
+                  <InputLabel id="export-period-label">Ledger period</InputLabel>
+                  <Select
+                    labelId="export-period-label"
+                    label="Ledger period"
+                    value={exportPeriod}
+                    onChange={(event) => {
+                      const nextPeriod = event.target.value
+                      setExportPeriod(nextPeriod)
+                      setExportRange(createLedgerExportRange(nextPeriod, activeEntries))
+                    }}
+                  >
+                    {ledgerExportPeriodOptions.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                  <TextField
+                    label="Start date"
+                    type="date"
+                    value={exportRange.startDate}
+                    onChange={(event) =>
+                      setExportRange((prev) => ({
+                        ...prev,
+                        startDate: event.target.value,
+                      }))
+                    }
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                  />
+                  <TextField
+                    label="End date"
+                    type="date"
+                    value={exportRange.endDate}
+                    onChange={(event) =>
+                      setExportRange((prev) => ({
+                        ...prev,
+                        endDate: event.target.value,
+                      }))
+                    }
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                  />
+                </Stack>
+              </>
+            )}
             <FormControl fullWidth>
               <InputLabel id="export-format-label">File format</InputLabel>
               <Select
@@ -3083,8 +3281,8 @@ function App() {
               </Select>
             </FormControl>
             <Alert severity="info" variant="outlined">
-              {exportScope === 'ledger'
-                ? 'Ledger exports include the statistics rollup and the full entry log for the selected guild or guest ledger.'
+              {exportIncludesLedger
+                ? `Ledger exports use the ${getLedgerExportPeriodLabel(exportPeriod).toLowerCase()} view for ${formatDisplayDateRange(resolveStatisticsRange(exportRange).startDate, resolveStatisticsRange(exportRange).endDate)} and respect your current ledger filters.`
                 : exportScope === 'member-management'
                   ? 'Members and dues exports include shared dues settings, roster status, and recent dues and donation history.'
                   : 'Full combined exports bundle both the ledger report and the members and dues report into one file.'}

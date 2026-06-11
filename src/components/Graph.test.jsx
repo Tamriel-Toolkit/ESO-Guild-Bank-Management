@@ -5,7 +5,12 @@ import Graph from './Graph'
 
 vi.mock('@mui/x-charts/LineChart', () => ({
   LineChart: ({ series, xAxis }) => (
-    <div data-testid="line-chart" data-series={series.map((item) => item.id).join(',')} data-points={xAxis[0].data.join(',')} />
+    <div
+      data-testid="line-chart"
+      data-series={series.map((item) => item.id).join(',')}
+      data-points={xAxis[0].data.join(',')}
+      data-net={series.find((item) => item.id === 'net')?.data.join(',') || ''}
+    />
   ),
 }))
 
@@ -30,6 +35,7 @@ describe('Graph', () => {
     render(<Graph entries={entries} statisticsRange={statisticsRange} />)
 
     expect(screen.getByTestId('line-chart')).toHaveAttribute('data-series', 'deposit,salesTax,withdrawal,net')
+    expect(screen.getByTestId('line-chart')).toHaveAttribute('data-net', '1500,1650')
 
     await user.click(screen.getByRole('checkbox', { name: 'Deposits' }))
     await user.click(screen.getByRole('checkbox', { name: 'Sales Tax' }))

@@ -1,7 +1,6 @@
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatDisplayDate, formatDisplayDateTime } from './utils/dateFormatting'
-import { buildMemberManagementSnapshot } from './utils/memberDues'
 
 const slugify = (value) =>
   String(value || 'report')
@@ -10,9 +9,29 @@ const slugify = (value) =>
     .replace(/^-+|-+$/g, '') || 'report'
 
 const formatTimestamp = (date = new Date()) => formatDisplayDateTime(date)
+const formatDisplayDateRange = (startDate, endDate) =>
+  startDate === endDate
+    ? formatDisplayDate(startDate)
+    : `${formatDisplayDate(startDate)} - ${formatDisplayDate(endDate)}`
 
 const toGold = (value) => Math.round(Number(value) || 0)
 const fmtGold = (value) => `${toGold(value).toLocaleString()}g`
+
+const getLedgerPeriodLabel = (period) => {
+  if (period === 'daily') {
+    return 'Daily'
+  }
+
+  if (period === 'weekly') {
+    return 'Weekly'
+  }
+
+  if (period === 'monthly') {
+    return 'Monthly'
+  }
+
+  return 'Overall'
+}
 
 const getEntryTypeLabel = (entry) => {
   if (entry.type === 'deposit' && entry.isDonation) {
@@ -30,6 +49,101 @@ const getEntryTypeLabel = (entry) => {
 
   return entry.type
 }
+
+export const summarizeLedgerEntries = (entries) => {
+  const summary = entries.reduce(
+    (totals, entry) => {
+      const amount = toGold(entry.amount)
+
+      totals.entryCount += 1
+
+      if (entry.type === 'deposit') {
+        totals.deposits += amount
+
+        if (entry.isDonation) {
+          totals.donations += amount
+        }
+
+        if (entry.isDue) {
+          totals.dues += amount
+        }
+      }
+
+      if (entry.type === 'salesTax') {
+        totals.salesTax += amount
+      }
+
+      if (entry.type === 'withdrawal') {
+        totals.withdrawals += amount
+      }
+
+      return totals
+    },
+    {
+      deposits: 0,
+      donations: 0,
+      dues: 0,
+      salesTax: 0,
+      withdrawals: 0,
+      entryCount: 0,
+    },
+  )
+
+  return {
+    ...summary,
+    grossIncome: summary.deposits + summary.salesTax,
+    netTotal: summary.deposits + summary.salesTax - summary.withdrawals,
+  }
+}
+
+export const getTopDonorRows = (entries, limit = 5) => {
+  const donorTotals = entries.reduce((totals, entry) => {
+    if (entry.type !== 'deposit' || !entry.isDonation) {
+      return totals
+    }
+
+    const username = entry.user?.trim() || 'Unknown user'
+    totals.set(username, (totals.get(username) || 0) + toGold(entry.amount))
+    return totals
+  }, new Map())
+
+  return [...donorTotals.entries()]
+    .sort((leftEntry, rightEntry) => rightEntry[1] - leftEntry[1])
+    .slice(0, limit)
+    .map(([username, amount], index) => ({
+      rank: index + 1,
+      username,
+      amount,
+    }))
+}
+
+export const buildLedgerBreakdownSections = (title, breakdowns) =>
+  breakdowns.map((breakdown) => {
+    const flattenedStatisticsRows = breakdown.statisticsRows
+      .filter((row) => !row.isSectionHeader)
+      .map((row) => {
+        const grandTotal = toGold(row.totals.deposit) + toGold(row.totals.salesTax) - toGold(row.totals.withdrawal)
+        const topContributors = row.topDonors?.length
+          ? row.topDonors.map((donor) => `#${donor.rank} ${donor.username} (${fmtGold(donor.amount)})`).join(' | ')
+          : ''
+
+        return [
+          row.label,
+          row.entryCount,
+          toGold(row.totals.deposit),
+          toGold(row.totals.withdrawal),
+          toGold(row.totals.salesTax),
+          grandTotal,
+          topContributors,
+        ]
+      })
+
+    return {
+      title: `${title} ${breakdown.title}`,
+      headers: ['Range', 'Entries', 'Deposits', 'Withdrawals', 'Sales Tax', 'Net Total', 'Top Contributors'],
+      rows: flattenedStatisticsRows,
+    }
+  })
 
 const createCsvContent = (sections) => {
   const lines = []
@@ -75,27 +189,18 @@ const downloadCsv = (content, fileName) => {
   downloadBlob(new Blob([content], { type: 'text/csv;charset=utf-8' }), fileName)
 }
 
-const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, entries }) => {
-  const flattenedStatisticsRows = statisticsRows.map((row) => {
-    if (row.isSectionHeader) {
-      return [row.section, '', '', '', '', '', '']
-    }
-
-    const grandTotal = toGold(row.totals.deposit) + toGold(row.totals.salesTax) - toGold(row.totals.withdrawal)
-    const topContributors = row.topDonors?.length
-      ? row.topDonors.map((donor) => `#${donor.rank} ${donor.username} (${fmtGold(donor.amount)})`).join(' | ')
-      : ''
-
-    return [
-      row.section,
-      row.label,
-      toGold(row.totals.deposit),
-      toGold(row.totals.withdrawal),
-      toGold(row.totals.salesTax),
-      grandTotal,
-      topContributors,
-    ]
-  })
+const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, entries, period, range }) => {
+  const summary = summarizeLedgerEntries(entries)
+  const topDonors = getTopDonorRows(entries)
+  const breakdowns = [
+    {
+      title: `${getLedgerPeriodLabel(period)} breakdown`,
+      period,
+      range,
+      statisticsRows,
+    },
+  ]
+  const breakdownSections = buildLedgerBreakdownSections(title, breakdowns)
 
   return [
     {
@@ -104,14 +209,32 @@ const buildLedgerSections = ({ title, guildName, generatedAt, statisticsRows, en
       rows: [
         ['Guild', guildName],
         ['Generated', generatedAt],
+        ['Ledger period', getLedgerPeriodLabel(period)],
+        ['Selected range', formatDisplayDateRange(range.startDate, range.endDate)],
         ['Entry count', entries.length],
       ],
     },
     {
-      title: `${title} Statistics`,
-      headers: ['Section', 'Range', 'Deposits', 'Withdrawals', 'Sales Tax', 'Grand Total', 'Top Contributors'],
-      rows: flattenedStatisticsRows,
+      title: `${title} Summary`,
+      headers: ['Metric', 'Value'],
+      rows: [
+        ['Gross income', fmtGold(summary.grossIncome)],
+        ['Net total', fmtGold(summary.netTotal)],
+        ['Deposits', fmtGold(summary.deposits)],
+        ['Withdrawals', fmtGold(summary.withdrawals)],
+        ['Sales tax', fmtGold(summary.salesTax)],
+        ['Donations', fmtGold(summary.donations)],
+        ['Dues', fmtGold(summary.dues)],
+      ],
     },
+    {
+      title: `${title} Top Donors`,
+      headers: ['Rank', 'Member', 'Donation Total'],
+      rows: topDonors.length
+        ? topDonors.map((donor) => [donor.rank, donor.username, fmtGold(donor.amount)])
+        : [['-', 'No donations in selected range', '-']],
+    },
+    ...breakdownSections,
     {
       title: `${title} Entries`,
       headers: ['Date', 'Type', 'Member', 'Amount', 'Notes'],
@@ -190,41 +313,92 @@ const buildMemberManagementSections = ({ title, guildName, generatedAt, snapshot
   },
 ]
 
-const renderPdfSections = (doc, reportTitle, sections) => {
-  let cursorY = 18
+const ensurePageSpace = (doc, cursorY, neededHeight = 20) => {
+  const pageHeight = doc.internal.pageSize.getHeight()
 
+  if (cursorY + neededHeight <= pageHeight - 14) {
+    return cursorY
+  }
+
+  doc.addPage()
+  return 18
+}
+
+const renderPdfTable = (doc, cursorY, section) => {
+  const nextCursorY = ensurePageSpace(doc, cursorY, 16)
+
+  doc.setFontSize(12)
+  doc.setTextColor(31, 41, 55)
+  doc.text(section.title, 14, nextCursorY)
+
+  autoTable(doc, {
+    startY: nextCursorY + 4,
+    head: section.headers?.length ? [section.headers] : undefined,
+    body: section.rows.length ? section.rows : [['No data available']],
+    styles: {
+      fontSize: 8,
+      cellPadding: 2.25,
+      textColor: [31, 41, 55],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [248, 250, 252],
+      fontStyle: 'bold',
+    },
+    bodyStyles: {
+      valign: 'middle',
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    margin: { left: 14, right: 14 },
+  })
+
+  return (doc.lastAutoTable?.finalY || nextCursorY) + 9
+}
+
+const renderPdfHeader = (doc, reportTitle, metadataLines) => {
+  const pageWidth = doc.internal.pageSize.getWidth()
+
+  doc.setFillColor(17, 24, 39)
+  doc.rect(0, 0, pageWidth, 28, 'F')
+  doc.setTextColor(248, 250, 252)
   doc.setFontSize(18)
-  doc.text(reportTitle, 14, cursorY)
-  cursorY += 10
+  doc.text(reportTitle, 14, 12)
+  doc.setFontSize(8.5)
+
+  metadataLines.forEach((line, index) => {
+    doc.text(line, 14, 18 + index * 4)
+  })
+
+  return 34
+}
+
+const renderPdfSections = (doc, reportTitle, sections, metadataLines) => {
+  let cursorY = renderPdfHeader(doc, reportTitle, metadataLines)
 
   for (const section of sections) {
-    doc.setFontSize(12)
-    doc.text(section.title, 14, cursorY)
-    cursorY += 4
-
-    autoTable(doc, {
-      startY: cursorY,
-      head: section.headers?.length ? [section.headers] : undefined,
-      body: section.rows.length ? section.rows : [['No data available']],
-      styles: {
-        fontSize: 8,
-        cellPadding: 2,
-      },
-      headStyles: {
-        fillColor: [34, 46, 60],
-      },
-      alternateRowStyles: {
-        fillColor: [245, 247, 250],
-      },
-      margin: { left: 14, right: 14 },
-    })
-
-    cursorY = (doc.lastAutoTable?.finalY || cursorY) + 10
+    cursorY = renderPdfTable(doc, cursorY, section)
   }
 }
 
-const createFileName = (guildName, reportKind, extension) =>
-  `${slugify(guildName)}-${slugify(reportKind)}-${new Date().toISOString().slice(0, 10)}.${extension}`
+const addPdfFooters = (doc) => {
+  const pageCount = doc.getNumberOfPages()
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    doc.setPage(pageNumber)
+    doc.setFontSize(8)
+    doc.setTextColor(100, 116, 139)
+    doc.text(`Page ${pageNumber} of ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' })
+  }
+}
+
+const createFileName = (guildName, reportKind, extension, ledgerPeriod) =>
+  `${slugify(guildName)}-${slugify(reportKind)}${ledgerPeriod ? `-${slugify(ledgerPeriod)}` : ''}-${new Date().toISOString().slice(0, 10)}.${extension}`
 
 export const exportReportBundle = ({
   format,
@@ -244,7 +418,20 @@ export const exportReportBundle = ({
       generatedAt,
       statisticsRows: ledgerData.statisticsRows,
       entries: ledgerData.entries,
+      period: ledgerData.period,
+      range: ledgerData.range,
     }))
+
+    if (ledgerData.breakdowns?.length > 1) {
+      sections.splice(
+        3,
+        1,
+        ...buildLedgerBreakdownSections(
+          reportKind === 'full' ? 'Ledger Report' : 'Ledger Report',
+          ledgerData.breakdowns,
+        ),
+      )
+    }
   }
 
   if (reportKind === 'member-management' || reportKind === 'full') {
@@ -257,7 +444,10 @@ export const exportReportBundle = ({
   }
 
   if (format === 'csv') {
-    downloadCsv(createCsvContent(sections), createFileName(normalizedGuildName, reportKind, 'csv'))
+    downloadCsv(
+      createCsvContent(sections),
+      createFileName(normalizedGuildName, reportKind, 'csv', reportKind === 'member-management' ? '' : ledgerData?.period),
+    )
     return
   }
 
@@ -266,6 +456,13 @@ export const exportReportBundle = ({
     doc,
     reportKind === 'full' ? `${normalizedGuildName} Full Report` : `${normalizedGuildName} ${reportKind === 'ledger' ? 'Ledger Report' : 'Member Management Report'}`,
     sections,
+    [
+      `Guild: ${normalizedGuildName}    Generated: ${generatedAt}`,
+      reportKind === 'member-management' || !ledgerData?.range
+        ? 'Report scope: Members and dues'
+        : `Ledger period: ${getLedgerPeriodLabel(ledgerData.period)}    Range: ${formatDisplayDateRange(ledgerData.range.startDate, ledgerData.range.endDate)}`,
+    ],
   )
-  doc.save(createFileName(normalizedGuildName, reportKind, 'pdf'))
+  addPdfFooters(doc)
+  doc.save(createFileName(normalizedGuildName, reportKind, 'pdf', reportKind === 'member-management' ? '' : ledgerData?.period))
 }
