@@ -4,7 +4,7 @@ test('guest can complete onboarding and log a ledger entry', async ({ page }) =>
   await page.goto('/')
 
   await expect(page.getByText('ESO Guild Gold Ledger')).toBeVisible()
-  await expect(page.getByText('Guest mode is temporary. Create an account to store data on the server for publication.')).toBeVisible()
+  await expect(page.getByText('Guest mode is temporary. Create an account to save your data to the server.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Open tutorial' }).click()
   await expect(page.getByText('Guided Tour')).toBeVisible()

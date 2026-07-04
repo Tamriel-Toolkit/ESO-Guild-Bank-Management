@@ -47,6 +47,12 @@ import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import {
   confirmPasswordReset,
+  createGuildRank,
+  updateGuildRank,
+  deleteGuildRank,
+  createCharacter,
+  updateCharacter,
+  deleteCharacter,
   createEntryForGuild,
   createGuildInvite,
   createGuild,
@@ -91,6 +97,8 @@ import PieBreakdownChart from './components/PieBreakdownChart'
 import PublicGuildProfile from './components/PublicGuildProfile'
 import RecruitmentSettings from './components/RecruitmentSettings'
 import SettingsDialog from './components/SettingsDialog'
+import RankManagementDialog from "./components/RankManagementDialog"
+import CharacterManagementDialog from "./components/CharacterManagementDialog"
 import Graph from './components/Graph'
 import TutorialOverlay from './components/TutorialOverlay'
 import { exportReportBundle, getOverallCurrentGold } from './reportExports'
@@ -907,6 +915,9 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([])
   const [auditLogLoading, setAuditLogLoading] = useState(false)
   const [auditLogError, setAuditLogError] = useState('')
+  const [rankManagementOpen, setRankManagementOpen] = useState(false)
+  const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
+  const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
   const [currentPage, setCurrentPage] = useState('ledger')
   const [recruitmentTab, setRecruitmentTab] = useState('settings')
   const [discoveryGuildId, setDiscoveryGuildId] = useState(null)
@@ -3123,7 +3134,15 @@ function App() {
                 onCreateTrackedMember={handleCreateTrackedMember}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 onDeleteTrackedMember={handleDeleteTrackedMember}
+<<<<<<< HEAD
                 fmtGold={fmtGold}
+=======
+                onOpenRankManagement={() => setRankManagementOpen(true)}
+                onOpenCharacterManagement={(member) => {
+                  setSelectedMemberForCharacters(member)
+                  setCharacterManagementOpen(true)
+                }}
+>>>>>>> origin/main
               />
             )}
 
@@ -3280,6 +3299,83 @@ function App() {
         auditLogs={auditLogs}
         auditLogLoading={auditLogLoading}
         auditLogError={auditLogError}
+      />
+
+      <RankManagementDialog
+        open={rankManagementOpen}
+        onClose={() => setRankManagementOpen(false)}
+        ranks={selectedGuild?.ranks || []}
+        onCreateRank={async (draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await createGuildRank(selectedGuild.id, draft)
+            persistAuthenticatedUser(response.user, "Rank created.")
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onUpdateRank={async (rankId, draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await updateGuildRank(selectedGuild.id, rankId, draft)
+            persistAuthenticatedUser(response.user, "Rank updated.")
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onDeleteRank={async (rankId) => {
+          if (!selectedGuild) return false
+          if (!window.confirm("Delete this rank? Members with this rank will be set to None.")) return
+          setMutationPending(true)
+          try {
+            const response = await deleteGuildRank(selectedGuild.id, rankId)
+            persistAuthenticatedUser(response.user, "Rank deleted.")
+          } catch (error) { handleApiError(error) }
+          finally { setMutationPending(false) }
+        }}
+        mutationPending={mutationPending}
+      />
+
+      <CharacterManagementDialog
+        open={characterManagementOpen}
+        onClose={() => {
+          setCharacterManagementOpen(false)
+          setSelectedMemberForCharacters(null)
+        }}
+        member={selectedMemberForCharacters}
+        onCreateCharacter={async (memberId, draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await createCharacter(selectedGuild.id, memberId, draft)
+            persistAuthenticatedUser(response.user, "Character added.")
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onUpdateCharacter={async (memberId, characterId, draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await updateCharacter(selectedGuild.id, memberId, characterId, draft)
+            persistAuthenticatedUser(response.user, "Character updated.")
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onDeleteCharacter={async (memberId, characterId) => {
+          if (!selectedGuild) return
+          if (!window.confirm("Delete this character?")) return
+          setMutationPending(true)
+          try {
+            const response = await deleteCharacter(selectedGuild.id, memberId, characterId)
+            persistAuthenticatedUser(response.user, "Character deleted.")
+          } catch (error) { handleApiError(error) }
+          finally { setMutationPending(false) }
+        }}
+        mutationPending={mutationPending}
       />
 
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>

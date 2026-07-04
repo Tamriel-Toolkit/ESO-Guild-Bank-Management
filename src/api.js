@@ -226,6 +226,40 @@ export const deleteTrackedMemberFromGuild = (guildId, trackedMemberId) =>
     method: 'DELETE',
   })
 
+export const createGuildRank = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/ranks`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateGuildRank = (guildId, rankId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/ranks/${rankId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteGuildRank = (guildId, rankId) =>
+  apiRequest(`/api/guilds/${guildId}/ranks/${rankId}`, {
+    method: 'DELETE',
+  })
+
+export const createCharacter = (guildId, memberId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${memberId}/characters`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateCharacter = (guildId, memberId, characterId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${memberId}/characters/${characterId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteCharacter = (guildId, memberId, characterId) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${memberId}/characters/${characterId}`, {
+    method: 'DELETE',
+  })
+
 export const createEntryForGuild = (guildId, payload) =>
   apiRequest(`/api/guilds/${guildId}/entries`, {
     method: 'POST',
@@ -243,6 +277,7 @@ export const deleteEntryFromGuild = (guildId, entryId) =>
     method: 'DELETE',
   })
 
+<<<<<<< HEAD
 export const getPublicGuilds = () => apiRequest('/api/recruitment/discover')
 
 export const getGuildRecruitmentSettings = (guildId) => apiRequest(`/api/guilds/${guildId}/recruitment`)
@@ -263,8 +298,62 @@ export const getGuildApplications = (guildId) => apiRequest(`/api/guilds/${guild
 
 export const reviewApplication = (guildId, applicationId, payload) =>
   apiRequest(`/api/guilds/${guildId}/applications/${applicationId}`, {
+=======
+export const getEventsForGuild = (guildId, start, end) =>
+  apiRequest(`/api/guilds/${guildId}/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
+
+export const createEventForGuild = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/events`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateEventInGuild = (guildId, eventId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/events/${eventId}`, {
+>>>>>>> origin/main
     method: 'PATCH',
     body: payload,
   })
 
+<<<<<<< HEAD
 export const getMyApplications = () => apiRequest('/api/my-applications')
+=======
+export const deleteEventFromGuild = (guildId, eventId) =>
+  apiRequest(`/api/guilds/${guildId}/events/${eventId}`, {
+    method: 'DELETE',
+  })
+
+export const getSignupsForEvent = (guildId, eventId, occurrenceDate) =>
+  apiRequest(`/api/guilds/${guildId}/events/${eventId}/signups?occurrenceDate=${encodeURIComponent(occurrenceDate)}`)
+
+export const createSignupForEvent = (guildId, eventId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/events/${eventId}/signups`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateSignup = (signupId, payload) =>
+  apiRequest(`/api/signups/${signupId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteSignup = (signupId) =>
+  apiRequest(`/api/signups/${signupId}`, {
+    method: 'DELETE',
+  })
+
+export const getCharactersForMember = (memberId) =>
+  apiRequest(`/api/tracked-members/${memberId}/characters`)
+
+export const createCharacterForMember = (memberId, name) =>
+  apiRequest(`/api/tracked-members/${memberId}/characters`, {
+    method: 'POST',
+    body: { name },
+  })
+
+export const deleteCharacterFromMember = (memberId, characterId) =>
+  apiRequest(`/api/tracked-members/${memberId}/characters/${characterId}`, {
+    method: 'DELETE',
+  })
+>>>>>>> origin/main
