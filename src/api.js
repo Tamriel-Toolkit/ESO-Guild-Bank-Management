@@ -242,3 +242,29 @@ export const deleteEntryFromGuild = (guildId, entryId) =>
   apiRequest(`/api/guilds/${guildId}/entries/${entryId}`, {
     method: 'DELETE',
   })
+
+export const getPublicGuilds = () => apiRequest('/api/recruitment/discover')
+
+export const getGuildRecruitmentSettings = (guildId) => apiRequest(`/api/guilds/${guildId}/recruitment`)
+
+export const updateGuildRecruitmentSettings = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/recruitment`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const submitApplication = (guildId, answers) =>
+  apiRequest(`/api/guilds/${guildId}/applications`, {
+    method: 'POST',
+    body: { answers },
+  })
+
+export const getGuildApplications = (guildId) => apiRequest(`/api/guilds/${guildId}/applications`)
+
+export const reviewApplication = (guildId, applicationId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/applications/${applicationId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const getMyApplications = () => apiRequest('/api/my-applications')

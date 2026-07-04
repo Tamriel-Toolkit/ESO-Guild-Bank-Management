@@ -31,6 +31,7 @@ function MemberManagementPage({
   onCreateTrackedMember,
   onUpdateTrackedMember,
   onDeleteTrackedMember,
+  fmtGold,
 }) {
   const [newMemberDraft, setNewMemberDraft] = useState(defaultNewMemberDraft)
   const [rowDrafts, setRowDrafts] = useState({})
@@ -164,17 +165,25 @@ function MemberManagementPage({
                     return (
                       <TableRow key={member.id}>
                         <TableCell>
-                          <TextField
-                            size="small"
-                            value={rowDraft.name}
-                            disabled={!canEdit}
-                            onChange={(event) =>
-                              setRowDrafts((prev) => ({
-                                ...prev,
-                                [member.id]: { ...rowDraft, name: event.target.value },
-                              }))
-                            }
-                          />
+                          <Stack spacing={0.5}>
+                            <TextField
+                              size="small"
+                              value={rowDraft.name}
+                              disabled={!canEdit}
+                              onChange={(event) =>
+                                setRowDrafts((prev) => ({
+                                  ...prev,
+                                  [member.id]: { ...rowDraft, name: event.target.value },
+                                }))
+                              }
+                              inputProps={{ 'data-testid': `member-name-input-\${member.id}` }}
+                            />
+                            {fmtGold && (
+                              <Typography variant="caption" color="text.secondary" component="span">
+                                Dues: {fmtGold(member.duesAmount || 0)}
+                              </Typography>
+                            )}
+                          </Stack>
                         </TableCell>
                         <TableCell>
                           <Chip

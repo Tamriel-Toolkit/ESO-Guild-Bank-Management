@@ -172,6 +172,28 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS guild_recruitment_settings (
+    guild_id TEXT PRIMARY KEY,
+    is_public INTEGER NOT NULL DEFAULT 0,
+    description TEXT NOT NULL DEFAULT '',
+    focus TEXT NOT NULL DEFAULT 'PvE',
+    requirements TEXT NOT NULL DEFAULT '[]',
+    application_questions TEXT NOT NULL DEFAULT '[]',
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS applications (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    applicant_user_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    answers TEXT NOT NULL DEFAULT '[]',
+    reviewer_notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE,
+    FOREIGN KEY (applicant_user_id) REFERENCES users (id) ON DELETE CASCADE
+  );
+
   CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
   CREATE INDEX IF NOT EXISTS idx_guilds_user_id ON guilds (user_id);
   CREATE INDEX IF NOT EXISTS idx_entries_guild_id ON entries (guild_id);
@@ -186,6 +208,11 @@ db.exec(`
 db.prepare(
   `INSERT OR IGNORE INTO guild_members (guild_id, user_id)
    SELECT id, user_id FROM guilds`,
+).run()
+
+db.prepare(
+  `INSERT OR IGNORE INTO guild_recruitment_settings (guild_id)
+   SELECT id FROM guilds`,
 ).run()
 
 const guildInviteColumns = db.prepare('PRAGMA table_info(guild_invites)').all()
@@ -512,6 +539,64 @@ const statements = {
      WHERE id = @id AND guild_id = @guildId`,
   ),
   deleteEntry: db.prepare('DELETE FROM entries WHERE id = ? AND guild_id = ?'),
+  listPublicGuilds: db.prepare(
+    `SELECT guilds.id, guilds.name, guild_recruitment_settings.focus, guild_recruitment_settings.description
+     FROM guilds
+     JOIN guild_recruitment_settings ON guilds.id = guild_recruitment_settings.guild_id
+     WHERE guild_recruitment_settings.is_public = 1
+     ORDER BY guilds.name ASC`,
+  ),
+  findRecruitmentSettings: db.prepare(
+    `SELECT guild_id AS guildId, is_public AS isPublic, description, focus, requirements, application_questions AS applicationQuestions
+     FROM guild_recruitment_settings
+     WHERE guild_id = ?`,
+  ),
+  createRecruitmentSettings: db.prepare(
+    `INSERT INTO guild_recruitment_settings (guild_id, is_public, description, focus, requirements, application_questions)
+     VALUES (@guildId, @isPublic, @description, @focus, @requirements, @applicationQuestions)`,
+  ),
+  updateRecruitmentSettings: db.prepare(
+    `UPDATE guild_recruitment_settings
+     SET is_public = @isPublic,
+         description = @description,
+         focus = @focus,
+         requirements = @requirements,
+         application_questions = @applicationQuestions
+     WHERE guild_id = @guildId`,
+  ),
+  createApplication: db.prepare(
+    `INSERT INTO applications (id, guild_id, applicant_user_id, status, answers, reviewer_notes)
+     VALUES (@id, @guildId, @applicantUserId, @status, @answers, @reviewerNotes)`,
+  ),
+  listApplicationsForGuild: db.prepare(
+    `SELECT applications.id, applications.guild_id AS guildId, applications.applicant_user_id AS applicantUserId,
+            applications.status, applications.answers, applications.reviewer_notes AS reviewerNotes,
+            applications.created_at AS createdAt, users.username AS applicantUsername
+     FROM applications
+     JOIN users ON users.id = applications.applicant_user_id
+     WHERE applications.guild_id = ?
+     ORDER BY applications.created_at DESC`,
+  ),
+  updateApplication: db.prepare(
+    `UPDATE applications
+     SET status = @status,
+         reviewer_notes = @reviewerNotes
+     WHERE id = @id AND guild_id = @guildId`,
+  ),
+  findApplicationById: db.prepare(
+    `SELECT id, guild_id AS guildId, applicant_user_id AS applicantUserId, status, answers, reviewer_notes AS reviewerNotes, created_at AS createdAt
+     FROM applications
+     WHERE id = ?`,
+  ),
+  listApplicationsForUser: db.prepare(
+    `SELECT applications.id, applications.guild_id AS guildId, guilds.name AS guildName,
+            applications.status, applications.answers, applications.reviewer_notes AS reviewerNotes,
+            applications.created_at AS createdAt
+     FROM applications
+     JOIN guilds ON guilds.id = applications.guild_id
+     WHERE applications.applicant_user_id = ?
+     ORDER BY applications.created_at DESC`,
+  ),
 }
 
 const app = express()
@@ -1102,6 +1187,18 @@ function ensureGuildForUser(userId, guildId) {
   return guild
 }
 
+function sanitizeRecruitmentSettings(payload) {
+  return {
+    isPublic: payload?.isPublic ? 1 : 0,
+    description: sanitizeText(payload?.description, 2000),
+    focus: sanitizeText(payload?.focus, 50) || 'PvE',
+    requirements: JSON.stringify(Array.isArray(payload?.requirements) ? payload.requirements : []),
+    applicationQuestions: JSON.stringify(
+      Array.isArray(payload?.applicationQuestions) ? payload.applicationQuestions : [],
+    ),
+  }
+}
+
 function ensureGuildOwner(userId, guildId) {
   const guild = ensureGuildForUser(userId, guildId)
   if (guild.membershipRole !== 'owner') {
@@ -1504,6 +1601,14 @@ app.post('/api/guilds', requireAuth, (request, response, next) => {
         defaultDuesAmount,
       })
       statements.createGuildMember.run(guildId, request.user.id, 'owner')
+      statements.createRecruitmentSettings.run({
+        guildId,
+        isPublic: 0,
+        description: '',
+        focus: 'PvE',
+        requirements: '[]',
+        applicationQuestions: '[]',
+      })
       writeAuditLog({
         actorUserId: request.user.id,
         action: 'guild.create',
@@ -1564,6 +1669,14 @@ app.post('/api/guilds/import-guest', requireAuth, (request, response, next) => {
         defaultDuesAmount,
       })
       statements.createGuildMember.run(guildId, request.user.id, 'owner')
+      statements.createRecruitmentSettings.run({
+        guildId,
+        isPublic: 0,
+        description: '',
+        focus: 'PvE',
+        requirements: '[]',
+        applicationQuestions: '[]',
+      })
 
       for (const entry of normalizedEntries) {
         statements.createEntry.run({ ...entry, guildId })
@@ -2031,6 +2144,186 @@ app.delete('/api/guilds/:guildId/entries/:entryId', requireAuth, (request, respo
     statements.deleteEntry.run(request.params.entryId, guild.id)
     scheduleBackup('entry-delete')
     response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/recruitment/discover', (request, response, next) => {
+  try {
+    const guilds = statements.listPublicGuilds.all()
+    response.json({ guilds })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/guilds/:guildId/recruitment', (request, response, next) => {
+  try {
+    const settings = statements.findRecruitmentSettings.get(request.params.guildId)
+    if (!settings) {
+      throw createHttpError(404, 'Recruitment settings for this guild were not found.')
+    }
+
+    const userId = getAuthenticatedUser(request)?.id
+    const isMember = userId ? Boolean(statements.findGuildMember.get(request.params.guildId, userId)) : false
+
+    if (!settings.isPublic && !isMember) {
+      throw createHttpError(403, 'This guild is not currently recruiting publicly.')
+    }
+
+    response.json({
+      ...settings,
+      isPublic: Boolean(settings.isPublic),
+      requirements: JSON.parse(settings.requirements),
+      applicationQuestions: JSON.parse(settings.applicationQuestions),
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/guilds/:guildId/recruitment', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const settings = sanitizeRecruitmentSettings(request.body)
+
+    statements.updateRecruitmentSettings.run({
+      guildId: guild.id,
+      ...settings,
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'guild.recruitment_update',
+      entityType: 'guild',
+      entityId: guild.id,
+      details: settings,
+    })
+
+    scheduleBackup('recruitment-update')
+    response.json({ message: 'Recruitment settings updated.' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/guilds/:guildId/applications', requireAuth, (request, response, next) => {
+  try {
+    const guildId = request.params.guildId
+    const settings = statements.findRecruitmentSettings.get(guildId)
+    if (!settings || !settings.isPublic) {
+      throw createHttpError(403, 'This guild is not currently accepting public applications.')
+    }
+
+    const answers = Array.isArray(request.body?.answers) ? request.body.answers : []
+    const applicationId = crypto.randomUUID()
+
+    statements.createApplication.run({
+      id: applicationId,
+      guildId,
+      applicantUserId: request.user.id,
+      status: 'pending',
+      answers: JSON.stringify(answers),
+      reviewerNotes: '',
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'guild.application_submit',
+      entityType: 'application',
+      entityId: applicationId,
+      details: { guildId },
+    })
+
+    scheduleBackup('application-submit')
+    response.status(201).json({ id: applicationId, message: 'Application submitted successfully.' })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/guilds/:guildId/applications', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const applications = statements.listApplicationsForGuild.all(guild.id).map((app) => ({
+      ...app,
+      answers: JSON.parse(app.answers),
+    }))
+
+    response.json({ applications })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/guilds/:guildId/applications/:applicationId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const application = statements.findApplicationById.get(request.params.applicationId)
+
+    if (!application || application.guildId !== guild.id) {
+      throw createHttpError(404, 'Application not found.')
+    }
+
+    const status = sanitizeText(request.body?.status, 20)
+    const reviewerNotes = sanitizeText(request.body?.reviewerNotes, 1000)
+
+    statements.updateApplication.run({
+      id: application.id,
+      guildId: guild.id,
+      status,
+      reviewerNotes,
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'guild.application_review',
+      entityType: 'application',
+      entityId: application.id,
+      details: { guildId: guild.id, status },
+    })
+
+    if (status === 'accepted') {
+       statements.createGuildMember.run(guild.id, application.applicantUserId, 'viewer')
+       const applicant = statements.findUserById.get(application.applicantUserId)
+       if (applicant) {
+         statements.createTrackedMember.run({
+           id: crypto.randomUUID(),
+           guildId: guild.id,
+           name: applicant.username,
+           duesAmount: 0,
+           duePeriod: 'monthly',
+           duesDay: 1,
+           useDefaultDues: 1,
+           duesExempt: 0,
+           isActive: 1,
+         })
+       }
+       writeAuditLog({
+         actorUserId: request.user.id,
+         action: 'guild.member_add_via_application',
+         entityType: 'guild_member',
+         entityId: `${guild.id}:${application.applicantUserId}`,
+         details: { guildId: guild.id, applicationId: application.id },
+       })
+    }
+
+    scheduleBackup('application-review')
+    response.json({ message: `Application ${status}.`, user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/my-applications', requireAuth, (request, response, next) => {
+  try {
+    const applications = statements.listApplicationsForUser.all(request.user.id).map((app) => ({
+      ...app,
+      answers: JSON.parse(app.answers),
+    }))
+
+    response.json({ applications })
   } catch (error) {
     next(error)
   }
