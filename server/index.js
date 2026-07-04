@@ -115,9 +115,21 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS guild_ranks (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    weight INTEGER NOT NULL DEFAULT 0,
+    permissions TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS tracked_members (
     id TEXT PRIMARY KEY,
     guild_id TEXT NOT NULL,
+    user_id INTEGER,
+    rank_id TEXT,
     name TEXT NOT NULL,
     dues_amount INTEGER NOT NULL DEFAULT 0,
     due_period TEXT NOT NULL DEFAULT 'monthly',
@@ -125,8 +137,22 @@ db.exec(`
     uses_default_dues INTEGER NOT NULL DEFAULT 1,
     dues_exempt INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER NOT NULL DEFAULT 1,
+    last_active_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE,
+    FOREIGN KEY (rank_id) REFERENCES guild_ranks (id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS characters (
+    id TEXT PRIMARY KEY,
+    tracked_member_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    class TEXT NOT NULL,
+    role TEXT NOT NULL,
+    level INTEGER NOT NULL DEFAULT 50,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tracked_member_id) REFERENCES tracked_members (id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS guild_invites (
@@ -177,6 +203,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_entries_guild_id ON entries (guild_id);
   CREATE INDEX IF NOT EXISTS idx_guild_members_user_id ON guild_members (user_id);
   CREATE INDEX IF NOT EXISTS idx_tracked_members_guild_id ON tracked_members (guild_id);
+  CREATE INDEX IF NOT EXISTS idx_tracked_members_user_id ON tracked_members (user_id);
+  CREATE INDEX IF NOT EXISTS idx_tracked_members_rank_id ON tracked_members (rank_id);
+  CREATE INDEX IF NOT EXISTS idx_guild_ranks_guild_id ON guild_ranks (guild_id);
+  CREATE INDEX IF NOT EXISTS idx_characters_tracked_member_id ON characters (tracked_member_id);
   CREATE INDEX IF NOT EXISTS idx_guild_invites_guild_id ON guild_invites (guild_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
   CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens (user_id);
@@ -239,6 +269,12 @@ if (!trackedMemberColumns.some((column) => column.name === 'is_active')) {
 }
 if (!trackedMemberColumns.some((column) => column.name === 'dues_exempt')) {
   db.exec('ALTER TABLE tracked_members ADD COLUMN dues_exempt INTEGER NOT NULL DEFAULT 0')
+}
+if (!trackedMemberColumns.some((column) => column.name === 'rank_id')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN rank_id TEXT REFERENCES guild_ranks(id) ON DELETE SET NULL')
+}
+if (!trackedMemberColumns.some((column) => column.name === 'user_id')) {
+  db.exec('ALTER TABLE tracked_members ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL')
 }
 if (!guildMemberColumns.some((column) => column.name === 'role')) {
   db.exec("ALTER TABLE guild_members ADD COLUMN role TEXT NOT NULL DEFAULT 'viewer'")
@@ -365,6 +401,8 @@ const statements = {
   listTrackedMembersForGuild: db.prepare(
     `SELECT id,
             guild_id AS guildId,
+            user_id AS userId,
+            rank_id AS rankId,
             name,
             dues_amount AS duesAmount,
             due_period AS duePeriod,
@@ -372,6 +410,7 @@ const statements = {
             uses_default_dues AS useDefaultDues,
             dues_exempt AS duesExempt,
             is_active AS isActive,
+            last_active_at AS lastActiveAt,
             created_at AS createdAt
      FROM tracked_members
      WHERE guild_id = ?
@@ -410,13 +449,16 @@ const statements = {
   findTrackedMemberForGuild: db.prepare(
     `SELECT id,
             guild_id AS guildId,
+            user_id AS userId,
+            rank_id AS rankId,
             name,
             dues_amount AS duesAmount,
             due_period AS duePeriod,
             dues_day AS duesDay,
             uses_default_dues AS useDefaultDues,
             dues_exempt AS duesExempt,
-            is_active AS isActive
+            is_active AS isActive,
+            last_active_at AS lastActiveAt
      FROM tracked_members
      WHERE id = ? AND guild_id = ?`,
   ),
@@ -425,18 +467,21 @@ const statements = {
      WHERE guild_id = ? AND user_id = ?`,
   ),
   createTrackedMember: db.prepare(
-    `INSERT INTO tracked_members (id, guild_id, name, dues_amount, due_period, dues_day, uses_default_dues, dues_exempt, is_active)
-     VALUES (@id, @guildId, @name, @duesAmount, @duePeriod, @duesDay, @useDefaultDues, @duesExempt, @isActive)`,
+    `INSERT INTO tracked_members (id, guild_id, user_id, rank_id, name, dues_amount, due_period, dues_day, uses_default_dues, dues_exempt, is_active, last_active_at)
+     VALUES (@id, @guildId, @userId, @rankId, @name, @duesAmount, @duePeriod, @duesDay, @useDefaultDues, @duesExempt, @isActive, @lastActiveAt)`,
   ),
   updateTrackedMember: db.prepare(
     `UPDATE tracked_members
      SET name = @name,
+         user_id = @userId,
+         rank_id = @rankId,
          dues_amount = @duesAmount,
          due_period = @duePeriod,
          dues_day = @duesDay,
          uses_default_dues = @useDefaultDues,
          dues_exempt = @duesExempt,
-         is_active = @isActive
+         is_active = @isActive,
+         last_active_at = @lastActiveAt
      WHERE id = @id AND guild_id = @guildId`,
   ),
   deleteTrackedMember: db.prepare('DELETE FROM tracked_members WHERE id = ? AND guild_id = ?'),
@@ -512,6 +557,38 @@ const statements = {
      WHERE id = @id AND guild_id = @guildId`,
   ),
   deleteEntry: db.prepare('DELETE FROM entries WHERE id = ? AND guild_id = ?'),
+  listRanksForGuild: db.prepare(
+    'SELECT id, guild_id AS guildId, name, weight, permissions FROM guild_ranks WHERE guild_id = ? ORDER BY weight ASC, name ASC',
+  ),
+  createRank: db.prepare(
+    'INSERT INTO guild_ranks (id, guild_id, name, weight, permissions) VALUES (@id, @guildId, @name, @weight, @permissions)',
+  ),
+  updateRank: db.prepare(
+    'UPDATE guild_ranks SET name = @name, weight = @weight, permissions = @permissions WHERE id = @id AND guild_id = @guildId',
+  ),
+  deleteRank: db.prepare('DELETE FROM guild_ranks WHERE id = ? AND guild_id = ?'),
+  listCharactersForMember: db.prepare(
+    'SELECT id, tracked_member_id AS trackedMemberId, name, class, role, level, is_primary AS isPrimary FROM characters WHERE tracked_member_id = ? ORDER BY is_primary DESC, name ASC',
+  ),
+  createCharacter: db.prepare(
+    'INSERT INTO characters (id, tracked_member_id, name, class, role, level, is_primary) VALUES (@id, @trackedMemberId, @name, @class, @role, @level, @isPrimary)',
+  ),
+  clearPrimaryCharactersForMember: db.prepare(
+    'UPDATE characters SET is_primary = 0 WHERE tracked_member_id = ?',
+  ),
+  updateCharacter: db.prepare(
+    'UPDATE characters SET name = @name, class = @class, role = @role, level = @level, is_primary = @isPrimary WHERE id = @id AND tracked_member_id = @trackedMemberId',
+  ),
+  deleteCharacter: db.prepare('DELETE FROM characters WHERE id = ? AND tracked_member_id = ?'),
+  findTrackedMemberByName: db.prepare(
+    'SELECT * FROM tracked_members WHERE guild_id = ? AND LOWER(name) = LOWER(?)',
+  ),
+  linkTrackedMemberToUser: db.prepare(
+    'UPDATE tracked_members SET user_id = ? WHERE id = ?',
+  ),
+  updateTrackedMemberActivity: db.prepare(
+    'UPDATE tracked_members SET last_active_at = ? WHERE user_id = ?',
+  ),
 }
 
 const app = express()
@@ -1032,9 +1109,9 @@ function sanitizeDefaultDuesAmount(value) {
 function sanitizeTrackedMemberPayload(payload) {
   const name = sanitizeText(payload?.name, 80)
   const duesAmount = Math.round(Number(payload?.duesAmount || 0))
-  const useDefaultDues = payload?.useDefaultDues === false ? 0 : 1
+  const useDefaultDues = payload?.useDefaultDues !== false ? 1 : 0
   const duesExempt = payload?.duesExempt === true ? 1 : 0
-  const isActive = payload?.isActive === false ? 0 : 1
+  const isActive = payload?.isActive !== false ? 1 : 0
 
   if (!name) {
     throw createHttpError(400, 'Enter a member name before saving them to the guild roster.')
@@ -1050,12 +1127,15 @@ function sanitizeTrackedMemberPayload(payload) {
 
   return {
     name,
+    userId: payload?.userId || null,
+    rankId: payload?.rankId || null,
     duesAmount: useDefaultDues ? 0 : duesAmount,
     duePeriod: 'monthly',
     duesDay: 1,
     useDefaultDues,
     duesExempt,
     isActive,
+    lastActiveAt: payload?.lastActiveAt || null,
   }
 }
 
@@ -1144,12 +1224,20 @@ function serializeUser(userId) {
       role: sanitizeGuildRole(member.role),
       isOwner: Boolean(member.isOwner),
     })),
+    ranks: statements.listRanksForGuild.all(guild.id).map(r => ({
+      ...r,
+      permissions: JSON.parse(r.permissions),
+    })),
     trackedMembers: statements.listTrackedMembersForGuild.all(guild.id).map((member) => ({
       ...member,
       duePeriod: member.duePeriod === 'weekly' ? 'weekly' : 'monthly',
       useDefaultDues: Boolean(member.useDefaultDues),
       duesExempt: Boolean(member.duesExempt),
       isActive: Boolean(member.isActive),
+      characters: statements.listCharactersForMember.all(member.id).map(c => ({
+        ...c,
+        isPrimary: Boolean(c.isPrimary),
+      })),
     })),
     entries: statements.listEntriesForGuild.all(guild.id),
   }))
@@ -1278,6 +1366,8 @@ app.post('/api/auth/login', (request, response, next) => {
     }
 
     createSession(response, user.id)
+    // Update activity tracking when logging in
+    statements.updateTrackedMemberActivity.run(new Date().toISOString(), user.id)
     response.json({ user: serializeUser(user.id) })
   } catch (error) {
     next(error)
@@ -1753,6 +1843,16 @@ app.post('/api/invites/redeem', requireAuth, (request, response, next) => {
     const transaction = db.transaction(() => {
       statements.createGuildMember.run(invite.guildId, request.user.id, 'viewer')
       statements.updateUserSelectedGuild.run(invite.guildId, request.user.id)
+
+      // Sync with tracked members if a member with the same name exists
+      const user = statements.findUserById.get(request.user.id)
+      if (user) {
+        const existingTrackedMember = statements.findTrackedMemberByName.get(invite.guildId, user.username)
+        if (existingTrackedMember && !existingTrackedMember.user_id) {
+          statements.linkTrackedMemberToUser.run(user.id, existingTrackedMember.id)
+        }
+      }
+
       writeAuditLog({
         actorUserId: request.user.id,
         action: 'guild.invite_redeem',
@@ -1936,6 +2036,160 @@ app.delete('/api/guilds/:guildId/tracked-members/:trackedMemberId', requireAuth,
 
     statements.deleteTrackedMember.run(request.params.trackedMemberId, guild.id)
     scheduleBackup('tracked-member-delete')
+    response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/guilds/:guildId/ranks', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildOwner(request.user.id, request.params.guildId)
+    const name = sanitizeText(request.body?.name, 80)
+    if (!name) throw createHttpError(400, 'Enter a rank name.')
+    const id = crypto.randomUUID()
+    const weight = Number(request.body?.weight) || 0
+    const permissions = JSON.stringify(request.body?.permissions || {})
+
+    statements.createRank.run({ id, guildId: guild.id, name, weight, permissions })
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'rank.create',
+      entityType: 'rank',
+      entityId: id,
+      details: { guildId: guild.id, name, weight },
+    })
+    scheduleBackup('rank-create')
+    response.status(201).json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/guilds/:guildId/ranks/:rankId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildOwner(request.user.id, request.params.guildId)
+    const name = sanitizeText(request.body?.name, 80)
+    if (!name) throw createHttpError(400, 'Enter a rank name.')
+    const weight = Number(request.body?.weight) || 0
+    const permissions = JSON.stringify(request.body?.permissions || {})
+
+    statements.updateRank.run({ id: request.params.rankId, guildId: guild.id, name, weight, permissions })
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'rank.update',
+      entityType: 'rank',
+      entityId: request.params.rankId,
+      details: { guildId: guild.id, name, weight },
+    })
+    scheduleBackup('rank-update')
+    response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/guilds/:guildId/ranks/:rankId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildOwner(request.user.id, request.params.guildId)
+    statements.deleteRank.run(request.params.rankId, guild.id)
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'rank.delete',
+      entityType: 'rank',
+      entityId: request.params.rankId,
+      details: { guildId: guild.id },
+    })
+    scheduleBackup('rank-delete')
+    response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/guilds/:guildId/tracked-members/:memberId/characters', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const member = statements.findTrackedMemberForGuild.get(request.params.memberId, guild.id)
+    if (!member) throw createHttpError(404, 'Member not found.')
+
+    const id = crypto.randomUUID()
+    const { name, class: className, role, level, isPrimary } = request.body
+    if (!name || !className || !role) throw createHttpError(400, 'Name, Class, and Role are required.')
+
+    if (isPrimary) {
+      statements.clearPrimaryCharactersForMember.run(member.id)
+    }
+
+    statements.createCharacter.run({
+      id,
+      trackedMemberId: member.id,
+      name: sanitizeText(name, 80),
+      class: sanitizeText(className, 40),
+      role: sanitizeText(role, 40),
+      level: Number(level) || 50,
+      isPrimary: isPrimary ? 1 : 0,
+    })
+
+    // Update last_active_at when data is touched
+    statements.updateTrackedMember.run({
+      ...member,
+      rankId: member.rankId,
+      lastActiveAt: new Date().toISOString(),
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'character.create',
+      entityType: 'character',
+      entityId: id,
+      details: { guildId: guild.id, memberId: member.id, name },
+    })
+    scheduleBackup('character-create')
+    response.status(201).json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/guilds/:guildId/tracked-members/:memberId/characters/:characterId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const member = statements.findTrackedMemberForGuild.get(request.params.memberId, guild.id)
+    if (!member) throw createHttpError(404, 'Member not found.')
+
+    const { name, class: className, role, level, isPrimary } = request.body
+    if (isPrimary) {
+      statements.clearPrimaryCharactersForMember.run(member.id)
+    }
+    statements.updateCharacter.run({
+      id: request.params.characterId,
+      trackedMemberId: member.id,
+      name: sanitizeText(name, 80),
+      class: sanitizeText(className, 40),
+      role: sanitizeText(role, 40),
+      level: Number(level) || 50,
+      isPrimary: isPrimary ? 1 : 0,
+    })
+
+    statements.updateTrackedMember.run({
+      ...member,
+      rankId: member.rankId,
+      lastActiveAt: new Date().toISOString(),
+    })
+
+    scheduleBackup('character-update')
+    response.json({ user: serializeUser(request.user.id) })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/guilds/:guildId/tracked-members/:memberId/characters/:characterId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    statements.deleteCharacter.run(request.params.characterId, request.params.memberId)
+    scheduleBackup('character-delete')
     response.json({ user: serializeUser(request.user.id) })
   } catch (error) {
     next(error)

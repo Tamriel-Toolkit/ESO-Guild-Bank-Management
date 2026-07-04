@@ -61,6 +61,12 @@ import {
   leaveGuild as leaveGuildRequest,
   logIn,
   logOut,
+  createGuildRank,
+  updateGuildRank,
+  deleteGuildRank,
+  createCharacter,
+  updateCharacter,
+  deleteCharacter,
   requestPasswordReset,
   resendVerificationEmail,
   redeemGuildInvite,
@@ -82,6 +88,8 @@ import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
 import MemberManagementPage from './components/MemberManagementPage'
+import RankManagementDialog from './components/RankManagementDialog'
+import CharacterManagementDialog from './components/CharacterManagementDialog'
 import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
 import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
 import PieBreakdownChart from './components/PieBreakdownChart'
@@ -902,6 +910,9 @@ function App() {
   const [auditLogs, setAuditLogs] = useState([])
   const [auditLogLoading, setAuditLogLoading] = useState(false)
   const [auditLogError, setAuditLogError] = useState('')
+  const [rankManagementOpen, setRankManagementOpen] = useState(false)
+  const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
+  const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
   const [currentPage, setCurrentPage] = useState('ledger')
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
@@ -3070,6 +3081,7 @@ function App() {
               <MemberManagementPage
                 selectedGuild={selectedGuild}
                 trackedMembers={trackedMembers}
+                ranks={selectedGuild?.ranks || []}
                 controlsRef={memberManagementControlsRef}
                 tableRef={memberManagementRosterRef}
                 mutationPending={mutationPending}
@@ -3077,6 +3089,11 @@ function App() {
                 onCreateTrackedMember={handleCreateTrackedMember}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 onDeleteTrackedMember={handleDeleteTrackedMember}
+                onOpenRankManagement={() => setRankManagementOpen(true)}
+                onOpenCharacterManagement={(member) => {
+                  setSelectedMemberForCharacters(member)
+                  setCharacterManagementOpen(true)
+                }}
               />
             )}
           </Box>
@@ -3195,6 +3212,83 @@ function App() {
         auditLogs={auditLogs}
         auditLogLoading={auditLogLoading}
         auditLogError={auditLogError}
+      />
+
+      <RankManagementDialog
+        open={rankManagementOpen}
+        onClose={() => setRankManagementOpen(false)}
+        ranks={selectedGuild?.ranks || []}
+        onCreateRank={async (draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await createGuildRank(selectedGuild.id, draft)
+            persistAuthenticatedUser(response.user, 'Rank created.')
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onUpdateRank={async (rankId, draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await updateGuildRank(selectedGuild.id, rankId, draft)
+            persistAuthenticatedUser(response.user, 'Rank updated.')
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onDeleteRank={async (rankId) => {
+          if (!selectedGuild) return false
+          if (!window.confirm('Delete this rank? Members with this rank will be set to "None".')) return
+          setMutationPending(true)
+          try {
+            const response = await deleteGuildRank(selectedGuild.id, rankId)
+            persistAuthenticatedUser(response.user, 'Rank deleted.')
+          } catch (error) { handleApiError(error) }
+          finally { setMutationPending(false) }
+        }}
+        mutationPending={mutationPending}
+      />
+
+      <CharacterManagementDialog
+        open={characterManagementOpen}
+        onClose={() => {
+          setCharacterManagementOpen(false)
+          setSelectedMemberForCharacters(null)
+        }}
+        member={selectedMemberForCharacters}
+        onCreateCharacter={async (memberId, draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await createCharacter(selectedGuild.id, memberId, draft)
+            persistAuthenticatedUser(response.user, 'Character added.')
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onUpdateCharacter={async (memberId, characterId, draft) => {
+          if (!selectedGuild) return false
+          setMutationPending(true)
+          try {
+            const response = await updateCharacter(selectedGuild.id, memberId, characterId, draft)
+            persistAuthenticatedUser(response.user, 'Character updated.')
+            return true
+          } catch (error) { handleApiError(error); return false }
+          finally { setMutationPending(false) }
+        }}
+        onDeleteCharacter={async (memberId, characterId) => {
+          if (!selectedGuild) return
+          if (!window.confirm('Delete this character?')) return
+          setMutationPending(true)
+          try {
+            const response = await deleteCharacter(selectedGuild.id, memberId, characterId)
+            persistAuthenticatedUser(response.user, 'Character deleted.')
+          } catch (error) { handleApiError(error) }
+          finally { setMutationPending(false) }
+        }}
+        mutationPending={mutationPending}
       />
 
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>

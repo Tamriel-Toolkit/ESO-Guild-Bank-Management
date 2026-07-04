@@ -34,7 +34,7 @@ describe('MemberManagementPage', () => {
     })
 
     await user.type(screen.getByLabelText('Member name'), 'Roster Member')
-    await user.click(screen.getByRole('button', { name: 'Add member' }))
+    await user.click(screen.getByRole('button', { name: 'Add Member' }))
 
     await waitFor(() => {
       expect(onCreateTrackedMember).toHaveBeenCalledWith({
@@ -43,6 +43,7 @@ describe('MemberManagementPage', () => {
         useDefaultDues: true,
         duesExempt: false,
         isActive: true,
+        rankId: '',
       })
     })
   })
@@ -58,11 +59,11 @@ describe('MemberManagementPage', () => {
       onUpdateTrackedMember,
     })
 
-    await user.click(screen.getByRole('button', { name: 'Mark inactive' }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Deactivate' }))
 
     await waitFor(() => {
       expect(onUpdateTrackedMember).toHaveBeenCalledWith('member-1', {
+        id: 'member-1',
         name: 'Bravo',
         duesAmount: 3200,
         useDefaultDues: false,
@@ -76,6 +77,6 @@ describe('MemberManagementPage', () => {
     renderPage({ canEdit: false })
 
     expect(screen.getByText('Viewer access is read-only. Only admins and owners can update the roster.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add member' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add Member' })).toBeDisabled()
   })
 })
