@@ -226,6 +226,40 @@ export const deleteTrackedMemberFromGuild = (guildId, trackedMemberId) =>
     method: 'DELETE',
   })
 
+export const createGuildRank = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/ranks`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateGuildRank = (guildId, rankId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/ranks/${rankId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteGuildRank = (guildId, rankId) =>
+  apiRequest(`/api/guilds/${guildId}/ranks/${rankId}`, {
+    method: 'DELETE',
+  })
+
+export const createCharacter = (guildId, memberId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${memberId}/characters`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateCharacter = (guildId, memberId, characterId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${memberId}/characters/${characterId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteCharacter = (guildId, memberId, characterId) =>
+  apiRequest(`/api/guilds/${guildId}/tracked-members/${memberId}/characters/${characterId}`, {
+    method: 'DELETE',
+  })
+
 export const createEntryForGuild = (guildId, payload) =>
   apiRequest(`/api/guilds/${guildId}/entries`, {
     method: 'POST',
