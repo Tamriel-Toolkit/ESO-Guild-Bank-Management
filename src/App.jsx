@@ -77,6 +77,8 @@ import {
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
+import CalendarPage from './components/CalendarPage'
+import CharacterManager from './components/CharacterManager'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
@@ -903,6 +905,7 @@ function App() {
   const [auditLogLoading, setAuditLogLoading] = useState(false)
   const [auditLogError, setAuditLogError] = useState('')
   const [currentPage, setCurrentPage] = useState('ledger')
+  const [characterManagerMember, setCharacterManagerMember] = useState(null)
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -2344,6 +2347,7 @@ function App() {
                   sx={{ minHeight: 48 }}
                 >
                   <Tab value="ledger" label="Ledger" />
+                  <Tab value="calendar" label="Calendar" />
                   <Tab value="dues" label="Dues" />
                   <Tab value="member-management" label="Member Management" />
                 </Tabs>
@@ -3066,6 +3070,14 @@ function App() {
               />
             )}
 
+            {currentPage === 'calendar' && sessionUser && (
+              <CalendarPage
+                selectedGuild={selectedGuild}
+                trackedMembers={trackedMembers}
+                canEdit={canEditSelectedGuild}
+              />
+            )}
+
             {currentPage === 'member-management' && sessionUser && (
               <MemberManagementPage
                 selectedGuild={selectedGuild}
@@ -3077,6 +3089,7 @@ function App() {
                 onCreateTrackedMember={handleCreateTrackedMember}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 onDeleteTrackedMember={handleDeleteTrackedMember}
+                onManageCharacters={(member) => setCharacterManagerMember(member)}
               />
             )}
           </Box>
@@ -3195,6 +3208,13 @@ function App() {
         auditLogs={auditLogs}
         auditLogLoading={auditLogLoading}
         auditLogError={auditLogError}
+      />
+
+      <CharacterManager
+        open={Boolean(characterManagerMember)}
+        onClose={() => setCharacterManagerMember(null)}
+        memberId={characterManagerMember?.id}
+        memberName={characterManagerMember?.name}
       />
 
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>

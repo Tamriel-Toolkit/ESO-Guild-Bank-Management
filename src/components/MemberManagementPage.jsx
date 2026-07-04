@@ -31,6 +31,7 @@ function MemberManagementPage({
   onCreateTrackedMember,
   onUpdateTrackedMember,
   onDeleteTrackedMember,
+  onManageCharacters,
 }) {
   const [newMemberDraft, setNewMemberDraft] = useState(defaultNewMemberDraft)
   const [rowDrafts, setRowDrafts] = useState({})
@@ -214,6 +215,13 @@ function MemberManagementPage({
                               }
                             >
                               Save
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => onManageCharacters(member)}
+                            >
+                              Characters
                             </Button>
                             <Button
                               size="small"

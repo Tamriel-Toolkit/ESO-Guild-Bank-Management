@@ -152,6 +152,43 @@ db.exec(`
     FOREIGN KEY (actor_user_id) REFERENCES users (id) ON DELETE SET NULL
   );
 
+  CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    max_participants INTEGER NOT NULL DEFAULT 0,
+    event_type TEXT NOT NULL DEFAULT 'other',
+    recurrence_rule TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS characters (
+    id TEXT PRIMARY KEY,
+    tracked_member_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tracked_member_id) REFERENCES tracked_members (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS event_signups (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    tracked_member_id TEXT NOT NULL,
+    character_id TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'dps',
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    attendance TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
+    FOREIGN KEY (tracked_member_id) REFERENCES tracked_members (id) ON DELETE CASCADE,
+    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -179,6 +216,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_tracked_members_guild_id ON tracked_members (guild_id);
   CREATE INDEX IF NOT EXISTS idx_guild_invites_guild_id ON guild_invites (guild_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
+  CREATE INDEX IF NOT EXISTS idx_events_guild_id ON events (guild_id);
+  CREATE INDEX IF NOT EXISTS idx_event_signups_event_id ON event_signups (event_id);
+  CREATE INDEX IF NOT EXISTS idx_event_signups_tracked_member_id ON event_signups (tracked_member_id);
+  CREATE INDEX IF NOT EXISTS idx_characters_tracked_member_id ON characters (tracked_member_id);
   CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens (user_id);
   CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id);
 `)
@@ -512,6 +553,92 @@ const statements = {
      WHERE id = @id AND guild_id = @guildId`,
   ),
   deleteEntry: db.prepare('DELETE FROM entries WHERE id = ? AND guild_id = ?'),
+  listEventsForGuild: db.prepare(
+    `SELECT id, guild_id AS guildId, title, description, start_time AS startTime, end_time AS endTime, max_participants AS maxParticipants, event_type AS eventType, recurrence_rule AS recurrenceRule, created_at AS createdAt
+     FROM events
+     WHERE guild_id = ?
+     ORDER BY start_time ASC`,
+  ),
+  findEventForGuild: db.prepare(
+    `SELECT id, guild_id AS guildId, title, description, start_time AS startTime, end_time AS endTime, max_participants AS maxParticipants, event_type AS eventType, recurrence_rule AS recurrenceRule
+     FROM events
+     WHERE id = ? AND guild_id = ?`,
+  ),
+  createEvent: db.prepare(
+    `INSERT INTO events (id, guild_id, title, description, start_time, end_time, max_participants, event_type, recurrence_rule)
+     VALUES (@id, @guildId, @title, @description, @startTime, @endTime, @maxParticipants, @eventType, @recurrenceRule)`,
+  ),
+  updateEvent: db.prepare(
+    `UPDATE events
+     SET title = @title,
+         description = @description,
+         start_time = @startTime,
+         end_time = @endTime,
+         max_participants = @maxParticipants,
+         event_type = @eventType,
+         recurrence_rule = @recurrenceRule
+     WHERE id = @id AND guild_id = @guildId`,
+  ),
+  deleteEvent: db.prepare('DELETE FROM events WHERE id = ? AND guild_id = ?'),
+  listSignupsForEvent: db.prepare(
+    `SELECT event_signups.id,
+            event_signups.event_id AS eventId,
+            event_signups.occurrence_date AS occurrenceDate,
+            event_signups.tracked_member_id AS trackedMemberId,
+            event_signups.character_id AS characterId,
+            event_signups.role,
+            event_signups.status,
+            event_signups.attendance,
+            event_signups.created_at AS createdAt,
+            tracked_members.name AS memberName,
+            characters.name AS characterName
+     FROM event_signups
+     JOIN tracked_members ON tracked_members.id = event_signups.tracked_member_id
+     JOIN characters ON characters.id = event_signups.character_id
+     WHERE event_signups.event_id = ? AND event_signups.occurrence_date = ?`,
+  ),
+  createSignup: db.prepare(
+    `INSERT INTO event_signups (id, event_id, occurrence_date, tracked_member_id, character_id, role, status)
+     VALUES (@id, @eventId, @occurrenceDate, @trackedMemberId, @characterId, @role, @status)`,
+  ),
+  updateSignup: db.prepare(
+    `UPDATE event_signups
+     SET character_id = @characterId,
+         role = @role,
+         status = @status,
+         attendance = @attendance
+     WHERE id = @id`,
+  ),
+  deleteSignup: db.prepare('DELETE FROM event_signups WHERE id = ?'),
+  findSignupById: db.prepare(
+    `SELECT event_signups.*, events.guild_id AS guildId
+     FROM event_signups
+     JOIN events ON events.id = event_signups.event_id
+     WHERE event_signups.id = ?`,
+  ),
+  countConfirmedSignups: db.prepare(
+    `SELECT COUNT(*) AS count
+     FROM event_signups
+     WHERE event_id = ? AND occurrence_date = ? AND status = 'confirmed'`,
+  ),
+  findTrackedMemberById: db.prepare('SELECT * FROM tracked_members WHERE id = ?'),
+  listCharactersForMember: db.prepare(
+    `SELECT id, tracked_member_id AS trackedMemberId, name, created_at AS createdAt
+     FROM characters
+     WHERE tracked_member_id = ?
+     ORDER BY name ASC`,
+  ),
+  createCharacter: db.prepare(
+    `INSERT INTO characters (id, tracked_member_id, name)
+     VALUES (@id, @trackedMemberId, @name)`,
+  ),
+  findCharacterById: db.prepare(
+    `SELECT characters.*, tracked_members.guild_id AS guildId
+     FROM characters
+     JOIN tracked_members ON tracked_members.id = characters.tracked_member_id
+     WHERE characters.id = ?`,
+  ),
+  deleteCharacter: db.prepare('DELETE FROM characters WHERE id = ? AND tracked_member_id = ?'),
 }
 
 const app = express()
@@ -948,6 +1075,84 @@ function clearSessionCookie(response) {
   })
 }
 
+function expandRecurringEvents(event, startLimit, endLimit) {
+  const instances = []
+  const eventStart = new Date(event.startTime)
+  const eventEnd = new Date(event.endTime)
+  const duration = eventEnd.getTime() - eventStart.getTime()
+
+  if (event.recurrenceRule === 'none') {
+    if (event.startTime < endLimit && event.endTime > startLimit) {
+      instances.push(event)
+    }
+    return instances
+  }
+
+  let current = new Date(eventStart)
+  // Safety break to prevent infinite loops
+  let count = 0
+  const maxInstances = 500
+
+  while (current.toISOString() < endLimit && count < maxInstances) {
+    const currentEnd = new Date(current.getTime() + duration)
+    const occurrenceDate = current.toISOString().slice(0, 10)
+
+    if (currentEnd.toISOString() > startLimit) {
+      instances.push({
+        ...event,
+        startTime: current.toISOString(),
+        endTime: currentEnd.toISOString(),
+        occurrenceDate,
+      })
+    }
+
+    if (event.recurrenceRule === 'daily') {
+      current.setDate(current.getDate() + 1)
+    } else if (event.recurrenceRule === 'weekly') {
+      current.setDate(current.getDate() + 7)
+    } else {
+      break
+    }
+    count++
+  }
+
+  return instances
+}
+
+function sanitizeEventPayload(payload) {
+  const title = sanitizeText(payload?.title, 100)
+  const description = sanitizeText(payload?.description, 1000)
+  const startTime = String(payload?.startTime || '')
+  const endTime = String(payload?.endTime || '')
+  const maxParticipants = Math.max(0, Math.round(Number(payload?.maxParticipants || 0)))
+  const eventType = sanitizeText(payload?.eventType, 50) || 'other'
+  const recurrenceRule = ['none', 'daily', 'weekly'].includes(payload?.recurrenceRule)
+    ? payload.recurrenceRule
+    : 'none'
+
+  if (!title) {
+    throw createHttpError(400, 'Enter an event title before saving.')
+  }
+
+  if (isNaN(Date.parse(startTime)) || isNaN(Date.parse(endTime))) {
+    throw createHttpError(400, 'Enter valid start and end times.')
+  }
+
+  if (startTime >= endTime) {
+    throw createHttpError(400, 'End time must be after start time.')
+  }
+
+  return {
+    title,
+    description,
+    startTime,
+    endTime,
+    maxParticipants,
+    eventType,
+    recurrenceRule,
+  }
+}
+
 function sanitizeEntryPayload(payload) {
   const type = String(payload?.type || '')
   const amount = Math.round(Number(payload?.amount))
@@ -1259,6 +1464,289 @@ app.post('/api/auth/signup', async (request, response, next) => {
       user: serializeUser(result.lastInsertRowid),
       notice: 'Account created. Check your email to verify your recovery address.',
     })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/guilds/:guildId/events', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    const start = request.query.start || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const end = request.query.end || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+
+    const events = statements.listEventsForGuild.all(guild.id)
+    const expandedEvents = events.flatMap((event) => expandRecurringEvents(event, start, end))
+
+    response.json({ events: expandedEvents })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/guilds/:guildId/events', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const eventData = sanitizeEventPayload(request.body)
+    const eventId = crypto.randomUUID()
+
+    statements.createEvent.run({
+      id: eventId,
+      guildId: guild.id,
+      ...eventData,
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'event.create',
+      entityType: 'event',
+      entityId: eventId,
+      details: { guildId: guild.id, ...eventData },
+    })
+
+    scheduleBackup('event-create')
+    response.status(201).json({ event: { id: eventId, ...eventData } })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/guilds/:guildId/events/:eventId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const event = statements.findEventForGuild.get(request.params.eventId, guild.id)
+    if (!event) {
+      throw createHttpError(404, 'That event could not be found.')
+    }
+
+    const eventData = sanitizeEventPayload(request.body)
+    statements.updateEvent.run({
+      id: event.id,
+      guildId: guild.id,
+      ...eventData,
+    })
+
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'event.update',
+      entityType: 'event',
+      entityId: event.id,
+      details: { guildId: guild.id, ...eventData },
+    })
+
+    scheduleBackup('event-update')
+    response.json({ event: { id: event.id, ...eventData } })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/guilds/:guildId/events/:eventId', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildEditor(request.user.id, request.params.guildId)
+    const event = statements.findEventForGuild.get(request.params.eventId, guild.id)
+    if (!event) {
+      throw createHttpError(404, 'That event could not be found.')
+    }
+
+    statements.deleteEvent.run(event.id, guild.id)
+    writeAuditLog({
+      actorUserId: request.user.id,
+      action: 'event.delete',
+      entityType: 'event',
+      entityId: event.id,
+      details: { guildId: guild.id, title: event.title },
+    })
+
+    scheduleBackup('event-delete')
+    response.status(204).end()
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/guilds/:guildId/events/:eventId/signups', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    const occurrenceDate = request.query.occurrenceDate
+    if (!occurrenceDate) {
+      throw createHttpError(400, 'Occurrence date is required.')
+    }
+
+    const signups = statements.listSignupsForEvent.all(request.params.eventId, occurrenceDate)
+    response.json({ signups })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/guilds/:guildId/events/:eventId/signups', requireAuth, (request, response, next) => {
+  try {
+    const guild = ensureGuildForUser(request.user.id, request.params.guildId)
+    const occurrenceDate = String(request.body.occurrenceDate)
+    const trackedMemberId = String(request.body.trackedMemberId)
+    const characterId = String(request.body.characterId)
+    const role = sanitizeText(request.body.role, 20) || 'dps'
+    let status = sanitizeText(request.body.status, 20) || 'confirmed'
+
+    if (!occurrenceDate || !trackedMemberId || !characterId) {
+      throw createHttpError(400, 'Missing required signup fields.')
+    }
+
+    const trackedMember = statements.findTrackedMemberById.get(trackedMemberId)
+    if (!trackedMember || trackedMember.guild_id !== guild.id) {
+      throw createHttpError(404, 'Tracked member not found in this guild.')
+    }
+
+    const character = statements.findCharacterById.get(characterId)
+    if (!character || character.tracked_member_id !== trackedMemberId) {
+      throw createHttpError(404, 'Character not found for this member.')
+    }
+
+    // Automated Waitlisting Logic
+    const event = statements.findEventForGuild.get(request.params.eventId, guild.id)
+    if (event && event.maxParticipants > 0 && status === 'confirmed') {
+      const confirmedCount = statements.countConfirmedSignups.get(event.id, occurrenceDate).count
+      if (confirmedCount >= event.maxParticipants) {
+        status = 'waitlist'
+      }
+    }
+
+    const signupId = crypto.randomUUID()
+    statements.createSignup.run({
+      id: signupId,
+      eventId: request.params.eventId,
+      occurrenceDate,
+      trackedMemberId,
+      characterId,
+      role,
+      status,
+    })
+
+    scheduleBackup('event-signup-create')
+    response.status(201).json({ id: signupId, status })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.patch('/api/signups/:signupId', requireAuth, (request, response, next) => {
+  try {
+    const signup = statements.findSignupById.get(request.params.signupId)
+    if (!signup) {
+      throw createHttpError(404, 'Signup not found.')
+    }
+
+    const guild = ensureGuildForUser(request.user.id, signup.guildId)
+
+    const isManager = ['admin', 'owner'].includes(guild.membershipRole)
+    // Only managers or the member owner can update signups.
+    // For simplicity, we check if the user is a guild editor OR if we want to allow members to update their own.
+    // In this app, tracked_members are not strictly linked to user accounts except by name/Discord (future).
+    // For now, let's allow guild editors to manage all, and restrict others.
+
+    if (!isManager) {
+      throw createHttpError(403, 'You do not have permission to update this signup.')
+    }
+
+    const characterId = request.body.characterId || signup.character_id
+    const role = request.body.role || signup.role
+    const status = request.body.status || signup.status
+    const attendance = request.body.attendance || signup.attendance
+
+    statements.updateSignup.run({
+      id: request.params.signupId,
+      characterId,
+      role,
+      status,
+      attendance,
+    })
+
+    scheduleBackup('event-signup-update')
+    response.json({ success: true })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/signups/:signupId', requireAuth, (request, response, next) => {
+  try {
+    const signup = statements.findSignupById.get(request.params.signupId)
+    if (!signup) {
+      throw createHttpError(404, 'Signup not found.')
+    }
+
+    const guild = ensureGuildForUser(request.user.id, signup.guildId)
+    if (!['admin', 'owner'].includes(guild.membershipRole)) {
+      throw createHttpError(403, 'You do not have permission to delete this signup.')
+    }
+
+    statements.deleteSignup.run(request.params.signupId)
+    scheduleBackup('event-signup-delete')
+    response.status(204).end()
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.get('/api/tracked-members/:memberId/characters', requireAuth, (request, response, next) => {
+  try {
+    const trackedMember = statements.findTrackedMemberById.get(request.params.memberId)
+    if (!trackedMember) {
+      throw createHttpError(404, 'Tracked member not found.')
+    }
+
+    // Ensure user has access to the guild the member belongs to
+    ensureGuildForUser(request.user.id, trackedMember.guild_id)
+
+    const characters = statements.listCharactersForMember.all(request.params.memberId)
+    response.json({ characters })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.post('/api/tracked-members/:memberId/characters', requireAuth, (request, response, next) => {
+  try {
+    const trackedMember = statements.findTrackedMemberById.get(request.params.memberId)
+    if (!trackedMember) {
+      throw createHttpError(404, 'Tracked member not found.')
+    }
+
+    // Only allow guild editors to add characters to members
+    ensureGuildEditor(request.user.id, trackedMember.guild_id)
+
+    const name = sanitizeText(request.body.name, 100)
+    if (!name) {
+      throw createHttpError(400, 'Character name is required.')
+    }
+
+    const id = crypto.randomUUID()
+    statements.createCharacter.run({
+      id,
+      trackedMemberId: request.params.memberId,
+      name,
+    })
+
+    scheduleBackup('character-create')
+    response.status(201).json({ id, name })
+  } catch (error) {
+    next(error)
+  }
+})
+
+app.delete('/api/tracked-members/:memberId/characters/:characterId', requireAuth, (request, response, next) => {
+  try {
+    const trackedMember = statements.findTrackedMemberById.get(request.params.memberId)
+    if (!trackedMember) {
+      throw createHttpError(404, 'Tracked member not found.')
+    }
+
+    ensureGuildEditor(request.user.id, trackedMember.guild_id)
+
+    statements.deleteCharacter.run(request.params.characterId, request.params.memberId)
+    scheduleBackup('character-delete')
+    response.status(204).end()
   } catch (error) {
     next(error)
   }
