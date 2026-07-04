@@ -68,10 +68,17 @@ function MemberManagementPage({
       nextDrafts[member.id] = {
         name: member.name,
         isActive: Boolean(member.isActive),
-        rankId: member.rank_id || '',
+        rankId: member.rankId || '',
       }
     }
-    setRowDrafts(nextDrafts)
+
+    const syncDraftsTimeout = window.setTimeout(() => {
+      setRowDrafts(nextDrafts)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(syncDraftsTimeout)
+    }
   }, [trackedMembers])
 
   const filteredMembers = useMemo(() => {
@@ -87,8 +94,8 @@ function MemberManagementPage({
         valA = a.name.toLowerCase()
         valB = b.name.toLowerCase()
       } else if (sort.column === 'lastActive') {
-        valA = a.last_active_at || ''
-        valB = b.last_active_at || ''
+        valA = a.lastActiveAt || ''
+        valB = b.lastActiveAt || ''
       }
       if (valA < valB) return sort.direction === 'asc' ? -1 : 1
       if (valA > valB) return sort.direction === 'asc' ? 1 : -1
@@ -265,7 +272,7 @@ function MemberManagementPage({
                   const rowDraft = rowDrafts[member.id] || {
                     name: member.name,
                     isActive: Boolean(member.isActive),
-                    rankId: member.rank_id || '',
+                    rankId: member.rankId || '',
                   }
                   const primaryChar = member.characters?.find(c => c.isPrimary) || member.characters?.[0]
 
@@ -320,7 +327,7 @@ function MemberManagementPage({
                       </TableCell>
                       <TableCell>
                         <Typography variant="caption">
-                          {member.last_active_at ? new Date(member.last_active_at).toLocaleDateString() : 'Never'}
+                          {member.lastActiveAt ? new Date(member.lastActiveAt).toLocaleDateString() : 'Never'}
                         </Typography>
                       </TableCell>
                       <TableCell align="right">

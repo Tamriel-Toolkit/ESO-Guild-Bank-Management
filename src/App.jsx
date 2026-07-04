@@ -83,6 +83,7 @@ import {
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
+import CalendarPage from './components/CalendarPage'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
@@ -2355,6 +2356,7 @@ function App() {
                   sx={{ minHeight: 48 }}
                 >
                   <Tab value="ledger" label="Ledger" />
+                  <Tab value="calendar" label="Calendar" />
                   <Tab value="dues" label="Dues" />
                   <Tab value="member-management" label="Member Management" />
                 </Tabs>
@@ -3074,6 +3076,14 @@ function App() {
                 onUpdateGuildDuesSettings={handleUpdateGuildDueSettings}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 fmtGold={fmtGold}
+              />
+            )}
+
+            {currentPage === 'calendar' && sessionUser && (
+              <CalendarPage
+                selectedGuild={selectedGuild}
+                trackedMembers={trackedMembers}
+                canEdit={canEditSelectedGuild}
               />
             )}
 
