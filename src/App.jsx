@@ -47,6 +47,12 @@ import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import {
   confirmPasswordReset,
+  createGuildRank,
+  updateGuildRank,
+  deleteGuildRank,
+  createCharacter,
+  updateCharacter,
+  deleteCharacter,
   createEntryForGuild,
   createGuildInvite,
   createGuild,
@@ -61,12 +67,6 @@ import {
   leaveGuild as leaveGuildRequest,
   logIn,
   logOut,
-  createGuildRank,
-  updateGuildRank,
-  deleteGuildRank,
-  createCharacter,
-  updateCharacter,
-  deleteCharacter,
   requestPasswordReset,
   resendVerificationEmail,
   redeemGuildInvite,
@@ -83,19 +83,17 @@ import {
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
-import CalendarPage from './components/CalendarPage'
-import CharacterManager from './components/CharacterManager'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
 import MemberManagementPage from './components/MemberManagementPage'
-import RankManagementDialog from './components/RankManagementDialog'
-import CharacterManagementDialog from './components/CharacterManagementDialog'
 import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
 import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
 import PieBreakdownChart from './components/PieBreakdownChart'
 import SettingsDialog from './components/SettingsDialog'
+import RankManagementDialog from "./components/RankManagementDialog"
+import CharacterManagementDialog from "./components/CharacterManagementDialog"
 import Graph from './components/Graph'
 import TutorialOverlay from './components/TutorialOverlay'
 import { exportReportBundle, getOverallCurrentGold } from './reportExports'
@@ -916,7 +914,6 @@ function App() {
   const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
   const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
   const [currentPage, setCurrentPage] = useState('ledger')
-  const [characterManagerMember, setCharacterManagerMember] = useState(null)
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -2358,7 +2355,6 @@ function App() {
                   sx={{ minHeight: 48 }}
                 >
                   <Tab value="ledger" label="Ledger" />
-                  <Tab value="calendar" label="Calendar" />
                   <Tab value="dues" label="Dues" />
                   <Tab value="member-management" label="Member Management" />
                 </Tabs>
@@ -3081,19 +3077,10 @@ function App() {
               />
             )}
 
-            {currentPage === 'calendar' && sessionUser && (
-              <CalendarPage
-                selectedGuild={selectedGuild}
-                trackedMembers={trackedMembers}
-                canEdit={canEditSelectedGuild}
-              />
-            )}
-
             {currentPage === 'member-management' && sessionUser && (
               <MemberManagementPage
                 selectedGuild={selectedGuild}
                 trackedMembers={trackedMembers}
-                ranks={selectedGuild?.ranks || []}
                 controlsRef={memberManagementControlsRef}
                 tableRef={memberManagementRosterRef}
                 mutationPending={mutationPending}
@@ -3101,15 +3088,11 @@ function App() {
                 onCreateTrackedMember={handleCreateTrackedMember}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 onDeleteTrackedMember={handleDeleteTrackedMember}
-<<<<<<< HEAD
                 onOpenRankManagement={() => setRankManagementOpen(true)}
                 onOpenCharacterManagement={(member) => {
                   setSelectedMemberForCharacters(member)
                   setCharacterManagementOpen(true)
                 }}
-=======
-                onManageCharacters={(member) => setCharacterManagerMember(member)}
->>>>>>> origin/main
               />
             )}
           </Box>
@@ -3230,7 +3213,6 @@ function App() {
         auditLogError={auditLogError}
       />
 
-<<<<<<< HEAD
       <RankManagementDialog
         open={rankManagementOpen}
         onClose={() => setRankManagementOpen(false)}
@@ -3240,7 +3222,7 @@ function App() {
           setMutationPending(true)
           try {
             const response = await createGuildRank(selectedGuild.id, draft)
-            persistAuthenticatedUser(response.user, 'Rank created.')
+            persistAuthenticatedUser(response.user, "Rank created.")
             return true
           } catch (error) { handleApiError(error); return false }
           finally { setMutationPending(false) }
@@ -3250,18 +3232,18 @@ function App() {
           setMutationPending(true)
           try {
             const response = await updateGuildRank(selectedGuild.id, rankId, draft)
-            persistAuthenticatedUser(response.user, 'Rank updated.')
+            persistAuthenticatedUser(response.user, "Rank updated.")
             return true
           } catch (error) { handleApiError(error); return false }
           finally { setMutationPending(false) }
         }}
         onDeleteRank={async (rankId) => {
           if (!selectedGuild) return false
-          if (!window.confirm('Delete this rank? Members with this rank will be set to "None".')) return
+          if (!window.confirm("Delete this rank? Members with this rank will be set to None.")) return
           setMutationPending(true)
           try {
             const response = await deleteGuildRank(selectedGuild.id, rankId)
-            persistAuthenticatedUser(response.user, 'Rank deleted.')
+            persistAuthenticatedUser(response.user, "Rank deleted.")
           } catch (error) { handleApiError(error) }
           finally { setMutationPending(false) }
         }}
@@ -3280,7 +3262,7 @@ function App() {
           setMutationPending(true)
           try {
             const response = await createCharacter(selectedGuild.id, memberId, draft)
-            persistAuthenticatedUser(response.user, 'Character added.')
+            persistAuthenticatedUser(response.user, "Character added.")
             return true
           } catch (error) { handleApiError(error); return false }
           finally { setMutationPending(false) }
@@ -3290,29 +3272,22 @@ function App() {
           setMutationPending(true)
           try {
             const response = await updateCharacter(selectedGuild.id, memberId, characterId, draft)
-            persistAuthenticatedUser(response.user, 'Character updated.')
+            persistAuthenticatedUser(response.user, "Character updated.")
             return true
           } catch (error) { handleApiError(error); return false }
           finally { setMutationPending(false) }
         }}
         onDeleteCharacter={async (memberId, characterId) => {
           if (!selectedGuild) return
-          if (!window.confirm('Delete this character?')) return
+          if (!window.confirm("Delete this character?")) return
           setMutationPending(true)
           try {
             const response = await deleteCharacter(selectedGuild.id, memberId, characterId)
-            persistAuthenticatedUser(response.user, 'Character deleted.')
+            persistAuthenticatedUser(response.user, "Character deleted.")
           } catch (error) { handleApiError(error) }
           finally { setMutationPending(false) }
         }}
         mutationPending={mutationPending}
-=======
-      <CharacterManager
-        open={Boolean(characterManagerMember)}
-        onClose={() => setCharacterManagerMember(null)}
-        memberId={characterManagerMember?.id}
-        memberName={characterManagerMember?.name}
->>>>>>> origin/main
       />
 
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
