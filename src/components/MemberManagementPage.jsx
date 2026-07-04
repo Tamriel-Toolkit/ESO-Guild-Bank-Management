@@ -45,12 +45,9 @@ function MemberManagementPage({
   onCreateTrackedMember,
   onUpdateTrackedMember,
   onDeleteTrackedMember,
-<<<<<<< HEAD
   fmtGold,
-=======
   onOpenRankManagement,
   onOpenCharacterManagement,
->>>>>>> origin/main
 }) {
   const [newMemberDraft, setNewMemberDraft] = useState(defaultNewMemberDraft)
   const [rowDrafts, setRowDrafts] = useState({})
@@ -273,70 +270,29 @@ function MemberManagementPage({
                   }
                   const primaryChar = member.characters?.find(c => c.isPrimary) || member.characters?.[0]
 
-<<<<<<< HEAD
-                    return (
-                      <TableRow key={member.id}>
-                        <TableCell>
-                          <Stack spacing={0.5}>
-                            <TextField
-                              size="small"
-                              value={rowDraft.name}
-                              disabled={!canEdit}
-                              onChange={(event) =>
-                                setRowDrafts((prev) => ({
-                                  ...prev,
-                                  [member.id]: { ...rowDraft, name: event.target.value },
-                                }))
-                              }
-                              inputProps={{ 'data-testid': `member-name-input-\${member.id}` }}
-                            />
-                            {fmtGold && (
-                              <Typography variant="caption" color="text.secondary" component="span">
-                                Dues: {fmtGold(member.duesAmount || 0)}
-                              </Typography>
-                            )}
-                          </Stack>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={rowDraft.isActive ? 'Active' : 'Inactive'}
-                            color={rowDraft.isActive ? 'success' : 'default'}
-                            variant={rowDraft.isActive ? 'filled' : 'outlined'}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end">
-                            <Button
-                              size="small"
-                              variant="text"
-                              disabled={mutationPending || !canEdit}
-                              onClick={() =>
-                                setRowDrafts((prev) => ({
-                                  ...prev,
-                                  [member.id]: { ...rowDraft, isActive: !rowDraft.isActive },
-                                }))
-                              }
-                            >
-                              Mark {rowDraft.isActive ? 'inactive' : 'active'}
-                            </Button>
-                            <Button
-=======
                   return (
                     <TableRow key={member.id} sx={{ opacity: member.isActive ? 1 : 0.6 }}>
                       <TableCell>
-                        <TextField
-                          size="small"
-                          variant="standard"
-                          value={rowDraft.name}
-                          disabled={!canEdit}
-                          onChange={(e) => setRowDrafts(p => ({ ...p, [member.id]: { ...rowDraft, name: e.target.value } }))}
-                          onBlur={() => {
-                            if (rowDraft.name !== member.name) {
-                              onUpdateTrackedMember(member.id, { ...member, name: rowDraft.name })
-                            }
-                          }}
-                        />
+                        <Stack spacing={0.5}>
+                          <TextField
+                            size="small"
+                            variant="standard"
+                            value={rowDraft.name}
+                            disabled={!canEdit}
+                            onChange={(e) => setRowDrafts(p => ({ ...p, [member.id]: { ...rowDraft, name: e.target.value } }))}
+                            onBlur={() => {
+                              if (rowDraft.name !== member.name) {
+                                onUpdateTrackedMember(member.id, { ...member, name: rowDraft.name })
+                              }
+                            }}
+                            inputProps={{ 'data-testid': `member-name-input-${member.id}` }}
+                          />
+                          {fmtGold && (
+                            <Typography variant="caption" color="text.secondary" component="span">
+                              Dues: {fmtGold(member.duesAmount || 0)}
+                            </Typography>
+                          )}
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         <Select
@@ -359,7 +315,6 @@ function MemberManagementPage({
                         <Stack direction="row" spacing={1} alignItems="center">
                           {primaryChar ? (
                             <Chip
->>>>>>> origin/main
                               size="small"
                               label={`${primaryChar.name} (${primaryChar.class} ${primaryChar.role})`}
                               variant="outlined"

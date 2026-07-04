@@ -277,7 +277,6 @@ export const deleteEntryFromGuild = (guildId, entryId) =>
     method: 'DELETE',
   })
 
-<<<<<<< HEAD
 export const getPublicGuilds = () => apiRequest('/api/recruitment/discover')
 
 export const getGuildRecruitmentSettings = (guildId) => apiRequest(`/api/guilds/${guildId}/recruitment`)
@@ -298,7 +297,12 @@ export const getGuildApplications = (guildId) => apiRequest(`/api/guilds/${guild
 
 export const reviewApplication = (guildId, applicationId, payload) =>
   apiRequest(`/api/guilds/${guildId}/applications/${applicationId}`, {
-=======
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const getMyApplications = () => apiRequest('/api/my-applications')
+
 export const getEventsForGuild = (guildId, start, end) =>
   apiRequest(`/api/guilds/${guildId}/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
 
@@ -310,14 +314,10 @@ export const createEventForGuild = (guildId, payload) =>
 
 export const updateEventInGuild = (guildId, eventId, payload) =>
   apiRequest(`/api/guilds/${guildId}/events/${eventId}`, {
->>>>>>> origin/main
     method: 'PATCH',
     body: payload,
   })
 
-<<<<<<< HEAD
-export const getMyApplications = () => apiRequest('/api/my-applications')
-=======
 export const deleteEventFromGuild = (guildId, eventId) =>
   apiRequest(`/api/guilds/${guildId}/events/${eventId}`, {
     method: 'DELETE',
@@ -356,4 +356,3 @@ export const deleteCharacterFromMember = (memberId, characterId) =>
   apiRequest(`/api/tracked-members/${memberId}/characters/${characterId}`, {
     method: 'DELETE',
   })
->>>>>>> origin/main

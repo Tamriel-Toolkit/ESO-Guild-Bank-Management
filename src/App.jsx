@@ -3134,15 +3134,12 @@ function App() {
                 onCreateTrackedMember={handleCreateTrackedMember}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 onDeleteTrackedMember={handleDeleteTrackedMember}
-<<<<<<< HEAD
                 fmtGold={fmtGold}
-=======
                 onOpenRankManagement={() => setRankManagementOpen(true)}
                 onOpenCharacterManagement={(member) => {
                   setSelectedMemberForCharacters(member)
                   setCharacterManagementOpen(true)
                 }}
->>>>>>> origin/main
               />
             )}
 
