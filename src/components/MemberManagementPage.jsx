@@ -71,14 +71,7 @@ function MemberManagementPage({
         rankId: member.rankId || '',
       }
     }
-
-    const syncDraftsTimeout = window.setTimeout(() => {
-      setRowDrafts(nextDrafts)
-    }, 0)
-
-    return () => {
-      window.clearTimeout(syncDraftsTimeout)
-    }
+    setRowDrafts(nextDrafts)
   }, [trackedMembers])
 
   const filteredMembers = useMemo(() => {

@@ -84,6 +84,7 @@ import {
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
 import CalendarPage from './components/CalendarPage'
+import CharacterManager from './components/CharacterManager'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
@@ -915,6 +916,7 @@ function App() {
   const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
   const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
   const [currentPage, setCurrentPage] = useState('ledger')
+  const [characterManagerMember, setCharacterManagerMember] = useState(null)
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -3099,11 +3101,15 @@ function App() {
                 onCreateTrackedMember={handleCreateTrackedMember}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 onDeleteTrackedMember={handleDeleteTrackedMember}
+<<<<<<< HEAD
                 onOpenRankManagement={() => setRankManagementOpen(true)}
                 onOpenCharacterManagement={(member) => {
                   setSelectedMemberForCharacters(member)
                   setCharacterManagementOpen(true)
                 }}
+=======
+                onManageCharacters={(member) => setCharacterManagerMember(member)}
+>>>>>>> origin/main
               />
             )}
           </Box>
@@ -3224,6 +3230,7 @@ function App() {
         auditLogError={auditLogError}
       />
 
+<<<<<<< HEAD
       <RankManagementDialog
         open={rankManagementOpen}
         onClose={() => setRankManagementOpen(false)}
@@ -3299,6 +3306,13 @@ function App() {
           finally { setMutationPending(false) }
         }}
         mutationPending={mutationPending}
+=======
+      <CharacterManager
+        open={Boolean(characterManagerMember)}
+        onClose={() => setCharacterManagerMember(null)}
+        memberId={characterManagerMember?.id}
+        memberName={characterManagerMember?.name}
+>>>>>>> origin/main
       />
 
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
