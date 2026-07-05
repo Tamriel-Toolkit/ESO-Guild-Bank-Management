@@ -47,6 +47,7 @@ function MemberManagementPage({
   onDeleteTrackedMember,
   onOpenRankManagement,
   onOpenCharacterManagement,
+  fmtGold,
 }) {
   const [newMemberDraft, setNewMemberDraft] = useState(defaultNewMemberDraft)
   const [rowDrafts, setRowDrafts] = useState({})
@@ -272,7 +273,8 @@ function MemberManagementPage({
                   return (
                     <TableRow key={member.id} sx={{ opacity: member.isActive ? 1 : 0.6 }}>
                       <TableCell>
-                        <TextField
+                        <Stack spacing={0.5}>
+                          <TextField
                           size="small"
                           variant="standard"
                           value={rowDraft.name}
@@ -284,6 +286,12 @@ function MemberManagementPage({
                             }
                           }}
                         />
+                        {fmtGold && (
+                          <Typography variant="caption" color="text.secondary" component="span">
+                            Dues: {fmtGold(member.duesAmount || 0)}
+                          </Typography>
+                        )}
+                        </Stack>
                       </TableCell>
                       <TableCell>
                         <Select

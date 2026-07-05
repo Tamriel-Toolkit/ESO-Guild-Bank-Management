@@ -156,7 +156,6 @@ db.exec(`
     is_public INTEGER NOT NULL DEFAULT 0,
     description TEXT NOT NULL DEFAULT '',
     focus TEXT NOT NULL DEFAULT 'PvE',
-    activity_times TEXT NOT NULL DEFAULT '',
     requirements TEXT NOT NULL DEFAULT '[]',
     application_questions TEXT NOT NULL DEFAULT '[]',
     FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
@@ -273,27 +272,26 @@ const statements = {
   linkTrackedMemberToUser: db.prepare('UPDATE tracked_members SET user_id = ? WHERE id = ?'),
   updateTrackedMemberActivity: db.prepare('UPDATE tracked_members SET last_active_at = ? WHERE user_id = ?'),
   listPublicGuilds: db.prepare(
-    `SELECT guilds.id, guilds.name, guild_recruitment_settings.focus, guild_recruitment_settings.description, guild_recruitment_settings.activity_times AS activityTimes
+    `SELECT guilds.id, guilds.name, guild_recruitment_settings.focus, guild_recruitment_settings.description
      FROM guilds
      JOIN guild_recruitment_settings ON guilds.id = guild_recruitment_settings.guild_id
      WHERE guild_recruitment_settings.is_public = 1
      ORDER BY guilds.name ASC`,
   ),
   findRecruitmentSettings: db.prepare(
-    `SELECT guild_id AS guildId, is_public AS isPublic, description, focus, activity_times AS activityTimes, requirements, application_questions AS applicationQuestions
+    `SELECT guild_id AS guildId, is_public AS isPublic, description, focus, requirements, application_questions AS applicationQuestions
      FROM guild_recruitment_settings
      WHERE guild_id = ?`,
   ),
   createRecruitmentSettings: db.prepare(
-    `INSERT INTO guild_recruitment_settings (guild_id, is_public, description, focus, activity_times, requirements, application_questions)
-     VALUES (@guildId, @isPublic, @description, @focus, @activityTimes, @requirements, @applicationQuestions)`,
+    `INSERT INTO guild_recruitment_settings (guild_id, is_public, description, focus, requirements, application_questions)
+     VALUES (@guildId, @isPublic, @description, @focus, @requirements, @applicationQuestions)`,
   ),
   updateRecruitmentSettings: db.prepare(
     `UPDATE guild_recruitment_settings
      SET is_public = @isPublic,
          description = @description,
          focus = @focus,
-         activity_times = @activityTimes,
          requirements = @requirements,
          application_questions = @applicationQuestions
      WHERE guild_id = @guildId`,
@@ -844,7 +842,6 @@ function sanitizeRecruitmentSettings(payload) {
     isPublic: payload?.isPublic ? 1 : 0,
     description: sanitizeText(payload?.description, 2000),
     focus: sanitizeText(payload?.focus, 50) || 'PvE',
-    activityTimes: sanitizeText(payload?.activityTimes, 200),
     requirements: JSON.stringify(Array.isArray(payload?.requirements) ? payload.requirements : []),
     applicationQuestions: JSON.stringify(
       Array.isArray(payload?.applicationQuestions) ? payload.applicationQuestions : [],

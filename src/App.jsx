@@ -80,6 +80,24 @@ import {
   updateEntryInGuild,
   updateTrackedMemberInGuild as updateTrackedMemberRequest,
   verifyEmailToken,
+  deleteCharacterFromMember,
+  createCharacterForMember,
+  getCharactersForMember,
+  deleteSignup,
+  updateSignup,
+  createSignupForEvent,
+  getSignupsForEvent,
+  deleteEventFromGuild,
+  updateEventInGuild,
+  createEventForGuild,
+  getEventsForGuild,
+  getMyApplications,
+  reviewApplication,
+  getGuildApplications,
+  submitApplication,
+  updateGuildRecruitmentSettings,
+  getGuildRecruitmentSettings,
+  getPublicGuilds,
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
@@ -88,6 +106,14 @@ import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
 import MemberManagementPage from './components/MemberManagementPage'
+import RecruitmentSettings from './components/RecruitmentSettings'
+import PublicGuildProfile from './components/PublicGuildProfile'
+import OfficerApplications from './components/OfficerApplications'
+import MyApplications from './components/MyApplications'
+import GuildDiscoveryPage from './components/GuildDiscoveryPage'
+import EventDialog from './components/EventDialog'
+import EventDetailView from './components/EventDetailView'
+import CalendarPage from './components/CalendarPage'
 import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
 import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
 import PieBreakdownChart from './components/PieBreakdownChart'
@@ -914,6 +940,8 @@ function App() {
   const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
   const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
   const [currentPage, setCurrentPage] = useState('ledger')
+  const [discoveryGuildId, setDiscoveryGuildId] = useState(null)
+  const [recruitmentTab, setRecruitmentTab] = useState('settings')
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -2271,6 +2299,15 @@ function App() {
                 justifyContent="flex-end"
                 sx={{ width: { xs: '100%', sm: 'auto' } }}
               >
+                <Button
+                  color="inherit"
+                  onClick={() => {
+                    setCurrentPage('discovery')
+                    setDiscoveryGuildId(null)
+                  }}
+                >
+                  Browse Guilds
+                </Button>
                 <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
                   <HelpOutlineIcon />
                 </IconButton>
@@ -2307,6 +2344,15 @@ function App() {
               </Stack>
             ) : (
               <Stack direction="row" spacing={1} alignItems="center">
+                <Button
+                  color="inherit"
+                  onClick={() => {
+                    setCurrentPage('discovery')
+                    setDiscoveryGuildId(null)
+                  }}
+                >
+                  Browse Guilds
+                </Button>
                 <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
                   <HelpOutlineIcon />
                 </IconButton>
@@ -2350,13 +2396,18 @@ function App() {
               {sessionUser ? (
                 <Tabs
                   ref={pageTabsRef}
-                  value={currentPage}
-                  onChange={(_event, value) => setCurrentPage(value)}
+                  value={['ledger', 'dues', 'member-management', 'recruitment', 'my-applications'].includes(currentPage) ? currentPage : false}
+                  onChange={(_event, value) => {
+                    setCurrentPage(value)
+                    setDiscoveryGuildId(null)
+                  }}
                   sx={{ minHeight: 48 }}
                 >
                   <Tab value="ledger" label="Ledger" />
                   <Tab value="dues" label="Dues" />
-                  <Tab value="member-management" label="Member Management" />
+                  <Tab value="member-management" label="Members" />
+                  <Tab value="recruitment" label="Recruitment" />
+                  <Tab value="my-applications" label="My Apps" />
                 </Tabs>
               ) : (
                 <Box />
@@ -3077,6 +3128,44 @@ function App() {
               />
             )}
 
+            {currentPage === 'recruitment' && sessionUser && selectedGuild && (
+              <Box>
+                <Tabs
+                  value={recruitmentTab}
+                  onChange={(_e, v) => setRecruitmentTab(v)}
+                  sx={{ mb: 3 }}
+                >
+                  <Tab value="settings" label="Profile & Settings" />
+                  <Tab value="applications" label="Applications" />
+                </Tabs>
+                {recruitmentTab === 'settings' ? (
+                  <RecruitmentSettings guildId={selectedGuild.id} canEdit={canEditSelectedGuild} />
+                ) : (
+                  <OfficerApplications
+                    guildId={selectedGuild.id}
+                    canEdit={canEditSelectedGuild}
+                    onApplicationReviewed={(user) => setServerUser(user)}
+                  />
+                )}
+              </Box>
+            )}
+
+            {currentPage === 'discovery' && (
+              discoveryGuildId ? (
+                <PublicGuildProfile
+                  guildId={discoveryGuildId}
+                  onBack={() => setDiscoveryGuildId(null)}
+                  currentUser={currentUser}
+                />
+              ) : (
+                <GuildDiscoveryPage onSelectGuild={(id) => setDiscoveryGuildId(id)} />
+              )
+            )}
+
+            {currentPage === 'my-applications' && sessionUser && (
+              <MyApplications />
+            )}
+
             {currentPage === 'member-management' && sessionUser && (
               <MemberManagementPage
                 selectedGuild={selectedGuild}
@@ -3093,6 +3182,7 @@ function App() {
                   setSelectedMemberForCharacters(member)
                   setCharacterManagementOpen(true)
                 }}
+                fmtGold={fmtGold}
               />
             )}
           </Box>
