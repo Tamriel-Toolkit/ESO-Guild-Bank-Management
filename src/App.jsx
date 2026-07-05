@@ -33,6 +33,7 @@ import {
   Tabs,
   TextField,
   Toolbar,
+  Divider,
   Typography,
   ThemeProvider,
   createTheme,
@@ -98,6 +99,10 @@ import {
   updateGuildRecruitmentSettings,
   getGuildRecruitmentSettings,
   getPublicGuilds,
+  getWebhooksForGuild,
+  createWebhookForGuild,
+  updateWebhookInGuild,
+  deleteWebhookFromGuild,
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
@@ -942,6 +947,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState('ledger')
   const [discoveryGuildId, setDiscoveryGuildId] = useState(null)
   const [recruitmentTab, setRecruitmentTab] = useState('settings')
+  const [webhooks, setWebhooks] = useState([])
+  const [webhooksLoading, setWebhooksLoading] = useState(false)
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -1138,7 +1145,45 @@ function App() {
     setStatisticsRange(createTodayStatisticsRange())
     setLedgerFilters({ ...defaultLedgerFilters })
     setSelectedSavedViewId('')
+    if (selectedGuild) {
+      loadWebhooks(selectedGuild.id)
+    }
   }, [sessionUser, selectedGuild?.id])
+
+  const loadWebhooks = async (guildId) => {
+    setWebhooksLoading(true)
+    try {
+      const response = await getWebhooksForGuild(guildId)
+      setWebhooks(response.webhooks)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setWebhooksLoading(false)
+    }
+  }
+
+  const handleCreateWebhook = async (draft) => {
+    if (!selectedGuild) return
+    setMutationPending(true)
+    try {
+      await createWebhookForGuild(selectedGuild.id, draft)
+      await loadWebhooks(selectedGuild.id)
+      setGlobalNotice('Webhook added.')
+    } catch (err) { handleApiError(err) }
+    finally { setMutationPending(false) }
+  }
+
+  const handleDeleteWebhook = async (webhookId) => {
+    if (!selectedGuild) return
+    if (!window.confirm('Remove this webhook?')) return
+    setMutationPending(true)
+    try {
+      await deleteWebhookFromGuild(selectedGuild.id, webhookId)
+      await loadWebhooks(selectedGuild.id)
+      setGlobalNotice('Webhook removed.')
+    } catch (err) { handleApiError(err) }
+    finally { setMutationPending(false) }
+  }
 
   useEffect(() => {
     try {
@@ -3137,15 +3182,84 @@ function App() {
                 >
                   <Tab value="settings" label="Profile & Settings" />
                   <Tab value="applications" label="Applications" />
+                  <Tab value="webhooks" label="Webhooks" />
                 </Tabs>
                 {recruitmentTab === 'settings' ? (
                   <RecruitmentSettings guildId={selectedGuild.id} canEdit={canEditSelectedGuild} />
-                ) : (
+                ) : recruitmentTab === 'applications' ? (
                   <OfficerApplications
                     guildId={selectedGuild.id}
                     canEdit={canEditSelectedGuild}
                     onApplicationReviewed={(user) => setServerUser(user)}
                   />
+                ) : (
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>Discord Webhooks</Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                        Configure real-time notifications for guild activity.
+                      </Typography>
+
+                      <Stack spacing={3}>
+                        {canEditSelectedGuild && (
+                          <Box component="form" onSubmit={(e) => {
+                            e.preventDefault()
+                            const fd = new FormData(e.target)
+                            handleCreateWebhook({
+                              url: fd.get('url'),
+                              channelName: fd.get('channelName'),
+                              eventTypes: ['audit_log', 'application_submitted', 'application_approved', 'event_created', 'daily_summary']
+                            })
+                            e.target.reset()
+                          }}>
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                              <TextField name="channelName" label="Channel Name (e.g. #alerts)" required size="small" />
+                              <TextField name="url" label="Webhook URL" required fullWidth size="small" />
+                              <Button type="submit" variant="contained" disabled={mutationPending}>Add Webhook</Button>
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                              New webhooks subscribe to all event types by default.
+                            </Typography>
+                          </Box>
+                        )}
+
+                        <Divider />
+
+                        {webhooksLoading ? <Typography>Loading webhooks...</Typography> : (
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Channel</TableCell>
+                                <TableCell>URL</TableCell>
+                                <TableCell>Events</TableCell>
+                                <TableCell align="right">Actions</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {webhooks.length === 0 ? (
+                                <TableRow><TableCell colSpan={4} align="center">No webhooks configured.</TableCell></TableRow>
+                              ) : webhooks.map(w => (
+                                <TableRow key={w.id}>
+                                  <TableCell>{w.channel_name}</TableCell>
+                                  <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {w.url}
+                                  </TableCell>
+                                  <TableCell>
+                                    {w.eventTypes.length} types
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <IconButton size="small" color="error" onClick={() => handleDeleteWebhook(w.id)} disabled={mutationPending || !canEditSelectedGuild}>
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
                 )}
               </Box>
             )}
