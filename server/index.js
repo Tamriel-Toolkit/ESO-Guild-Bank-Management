@@ -192,6 +192,46 @@ db.exec(`
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
 
+`)
+
+const tableInfos = {
+  users: db.pragma('table_info(users)'),
+  guilds: db.pragma('table_info(guilds)'),
+  entries: db.pragma('table_info(entries)'),
+  guild_members: db.pragma('table_info(guild_members)'),
+  tracked_members: db.pragma('table_info(tracked_members)'),
+  guild_invites: db.pragma('table_info(guild_invites)'),
+  guild_recruitment_settings: db.pragma('table_info(guild_recruitment_settings)'),
+}
+
+const ensureColumn = (table, column, definition) => {
+  if (!tableInfos[table].some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
+}
+
+ensureColumn('users', 'email', 'TEXT')
+ensureColumn('users', 'email_verified_at', 'TEXT')
+ensureColumn('guilds', 'due_scheme', "TEXT NOT NULL DEFAULT 'monthly'")
+ensureColumn('guilds', 'default_dues_amount', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('entries', 'is_donation', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('entries', 'is_due', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('entries', 'withdrawal_category', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('guild_members', 'role', "TEXT NOT NULL DEFAULT 'viewer'")
+ensureColumn('tracked_members', 'user_id', 'INTEGER')
+ensureColumn('tracked_members', 'rank_id', 'TEXT')
+ensureColumn('tracked_members', 'dues_amount', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('tracked_members', 'due_period', "TEXT NOT NULL DEFAULT 'monthly'")
+ensureColumn('tracked_members', 'dues_day', 'INTEGER NOT NULL DEFAULT 1')
+ensureColumn('tracked_members', 'uses_default_dues', 'INTEGER NOT NULL DEFAULT 1')
+ensureColumn('tracked_members', 'dues_exempt', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('tracked_members', 'is_active', 'INTEGER NOT NULL DEFAULT 1')
+ensureColumn('tracked_members', 'last_active_at', 'TEXT')
+ensureColumn('guild_invites', 'single_use', 'INTEGER NOT NULL DEFAULT 1')
+ensureColumn('guild_invites', 'expires_at', 'TEXT')
+ensureColumn('guild_recruitment_settings', 'activity_times', "TEXT NOT NULL DEFAULT ''")
+
+db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
   CREATE INDEX IF NOT EXISTS idx_guilds_user_id ON guilds (user_id);
   CREATE INDEX IF NOT EXISTS idx_entries_guild_id ON entries (guild_id);
@@ -205,6 +245,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs (created_at);
   CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_id ON email_verification_tokens (user_id);
   CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL;
 `)
 
 db.prepare(
@@ -1003,6 +1044,7 @@ app.get('/api/my-applications', requireAuth, (request, response, next) => {
 
 app.use((err, _req, res, _next) => {
   const status = err.status || 500
+  if (status >= 500) console.error(err)
   res.status(status).json({ error: status >= 500 ? 'Internal server error.' : err.message })
 })
 
