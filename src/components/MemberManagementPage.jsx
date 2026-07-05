@@ -45,9 +45,9 @@ function MemberManagementPage({
   onCreateTrackedMember,
   onUpdateTrackedMember,
   onDeleteTrackedMember,
-  fmtGold,
   onOpenRankManagement,
   onOpenCharacterManagement,
+  fmtGold,
 }) {
   const [newMemberDraft, setNewMemberDraft] = useState(defaultNewMemberDraft)
   const [rowDrafts, setRowDrafts] = useState({})
@@ -275,23 +275,22 @@ function MemberManagementPage({
                       <TableCell>
                         <Stack spacing={0.5}>
                           <TextField
-                            size="small"
-                            variant="standard"
-                            value={rowDraft.name}
-                            disabled={!canEdit}
-                            onChange={(e) => setRowDrafts(p => ({ ...p, [member.id]: { ...rowDraft, name: e.target.value } }))}
-                            onBlur={() => {
-                              if (rowDraft.name !== member.name) {
-                                onUpdateTrackedMember(member.id, { ...member, name: rowDraft.name })
-                              }
-                            }}
-                            inputProps={{ 'data-testid': `member-name-input-${member.id}` }}
-                          />
-                          {fmtGold && (
-                            <Typography variant="caption" color="text.secondary" component="span">
-                              Dues: {fmtGold(member.duesAmount || 0)}
-                            </Typography>
-                          )}
+                          size="small"
+                          variant="standard"
+                          value={rowDraft.name}
+                          disabled={!canEdit}
+                          onChange={(e) => setRowDrafts(p => ({ ...p, [member.id]: { ...rowDraft, name: e.target.value } }))}
+                          onBlur={() => {
+                            if (rowDraft.name !== member.name) {
+                              onUpdateTrackedMember(member.id, { ...member, name: rowDraft.name })
+                            }
+                          }}
+                        />
+                        {fmtGold && (
+                          <Typography variant="caption" color="text.secondary" component="span">
+                            Dues: {fmtGold(member.duesAmount || 0)}
+                          </Typography>
+                        )}
                         </Stack>
                       </TableCell>
                       <TableCell>

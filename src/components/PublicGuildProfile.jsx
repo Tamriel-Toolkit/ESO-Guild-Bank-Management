@@ -105,6 +105,17 @@ function PublicGuildProfile({ guildId, onBack, currentUser }) {
             {settings.description || 'No description provided.'}
           </Typography>
 
+          {settings.activityTimes && (
+            <>
+              <Typography variant="h6" gutterBottom>
+                Activity Times
+              </Typography>
+              <Typography variant="body1" sx={{ mb: 3 }}>
+                {settings.activityTimes}
+              </Typography>
+            </>
+          )}
+
           <Divider sx={{ my: 3 }} />
 
           <Typography variant="h6" gutterBottom>

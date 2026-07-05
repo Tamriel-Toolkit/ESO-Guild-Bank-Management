@@ -80,22 +80,43 @@ import {
   updateEntryInGuild,
   updateTrackedMemberInGuild as updateTrackedMemberRequest,
   verifyEmailToken,
+  deleteCharacterFromMember,
+  createCharacterForMember,
+  getCharactersForMember,
+  deleteSignup,
+  updateSignup,
+  createSignupForEvent,
+  getSignupsForEvent,
+  deleteEventFromGuild,
+  updateEventInGuild,
+  createEventForGuild,
+  getEventsForGuild,
+  getMyApplications,
+  reviewApplication,
+  getGuildApplications,
+  submitApplication,
+  updateGuildRecruitmentSettings,
+  getGuildRecruitmentSettings,
+  getPublicGuilds,
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
 import DeleteAccountDialog from './components/DeleteAccountDialog'
 import DuesDashboardPage from './components/DuesDashboardPage'
 import GuildAccessDialog from './components/GuildAccessDialog'
-import GuildDiscoveryPage from './components/GuildDiscoveryPage'
 import GuildProfilesDrawer from './components/GuildProfilesDrawer'
 import MemberManagementPage from './components/MemberManagementPage'
-import MyApplications from './components/MyApplications'
+import RecruitmentSettings from './components/RecruitmentSettings'
+import PublicGuildProfile from './components/PublicGuildProfile'
 import OfficerApplications from './components/OfficerApplications'
+import MyApplications from './components/MyApplications'
+import GuildDiscoveryPage from './components/GuildDiscoveryPage'
+import EventDialog from './components/EventDialog'
+import EventDetailView from './components/EventDetailView'
+import CalendarPage from './components/CalendarPage'
 import PasswordResetConfirmDialog from './components/PasswordResetConfirmDialog'
 import PasswordResetRequestDialog from './components/PasswordResetRequestDialog'
 import PieBreakdownChart from './components/PieBreakdownChart'
-import PublicGuildProfile from './components/PublicGuildProfile'
-import RecruitmentSettings from './components/RecruitmentSettings'
 import SettingsDialog from './components/SettingsDialog'
 import RankManagementDialog from "./components/RankManagementDialog"
 import CharacterManagementDialog from "./components/CharacterManagementDialog"
@@ -919,8 +940,8 @@ function App() {
   const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
   const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
   const [currentPage, setCurrentPage] = useState('ledger')
-  const [recruitmentTab, setRecruitmentTab] = useState('settings')
   const [discoveryGuildId, setDiscoveryGuildId] = useState(null)
+  const [recruitmentTab, setRecruitmentTab] = useState('settings')
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -2335,15 +2356,7 @@ function App() {
                 <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
                   <HelpOutlineIcon />
                 </IconButton>
-                <Button
-                  ref={authActionRef}
-                  color="inherit"
-                  onClick={() => {
-                    setAuthMode('login')
-                    setAuthOpen(true)
-                  }}
-                  disabled={sessionLoading}
-                >
+                <Button ref={authActionRef} color="inherit" onClick={() => setAuthOpen(true)} disabled={sessionLoading}>
                   Sign up / Log in
                 </Button>
               </Stack>
@@ -2369,13 +2382,7 @@ function App() {
                   ? 'Track deposits, withdrawals, and sales tax with member-linked entries.'
                   : currentPage === 'dues'
                     ? 'Manage guild dues settings and review the current cycle.'
-                    : currentPage === 'member-management'
-                      ? 'Add members, update names, and keep the roster current.'
-                      : currentPage === 'recruitment'
-                        ? 'Manage your public profile and review applications.'
-                        : currentPage === 'discovery'
-                          ? 'Find and apply to recruiting guilds.'
-                          : 'View your submitted guild applications.'}
+                    : 'Add members, update names, and keep the roster current.'}
               </Typography>
             </Box>
 
@@ -2394,8 +2401,6 @@ function App() {
                     setCurrentPage(value)
                     setDiscoveryGuildId(null)
                   }}
-                  variant="scrollable"
-                  scrollButtons="auto"
                   sx={{ minHeight: 48 }}
                 >
                   <Tab value="ledger" label="Ledger" />
@@ -2473,7 +2478,7 @@ function App() {
               )}
               {!sessionUser && !sessionLoading && (
                 <Alert severity="warning">
-                  Guest mode is temporary. Create an account to store data on the server for publication.
+                  Guest mode is temporary. Create an account to save your data to the server.
                 </Alert>
               )}
             </Stack>
@@ -3123,26 +3128,6 @@ function App() {
               />
             )}
 
-            {currentPage === 'member-management' && sessionUser && (
-              <MemberManagementPage
-                selectedGuild={selectedGuild}
-                trackedMembers={trackedMembers}
-                controlsRef={memberManagementControlsRef}
-                tableRef={memberManagementRosterRef}
-                mutationPending={mutationPending}
-                canEdit={canEditSelectedGuild}
-                onCreateTrackedMember={handleCreateTrackedMember}
-                onUpdateTrackedMember={handleUpdateTrackedMember}
-                onDeleteTrackedMember={handleDeleteTrackedMember}
-                fmtGold={fmtGold}
-                onOpenRankManagement={() => setRankManagementOpen(true)}
-                onOpenCharacterManagement={(member) => {
-                  setSelectedMemberForCharacters(member)
-                  setCharacterManagementOpen(true)
-                }}
-              />
-            )}
-
             {currentPage === 'recruitment' && sessionUser && selectedGuild && (
               <Box>
                 <Tabs
@@ -3179,6 +3164,26 @@ function App() {
 
             {currentPage === 'my-applications' && sessionUser && (
               <MyApplications />
+            )}
+
+            {currentPage === 'member-management' && sessionUser && (
+              <MemberManagementPage
+                selectedGuild={selectedGuild}
+                trackedMembers={trackedMembers}
+                controlsRef={memberManagementControlsRef}
+                tableRef={memberManagementRosterRef}
+                mutationPending={mutationPending}
+                canEdit={canEditSelectedGuild}
+                onCreateTrackedMember={handleCreateTrackedMember}
+                onUpdateTrackedMember={handleUpdateTrackedMember}
+                onDeleteTrackedMember={handleDeleteTrackedMember}
+                onOpenRankManagement={() => setRankManagementOpen(true)}
+                onOpenCharacterManagement={(member) => {
+                  setSelectedMemberForCharacters(member)
+                  setCharacterManagementOpen(true)
+                }}
+                fmtGold={fmtGold}
+              />
             )}
           </Box>
 

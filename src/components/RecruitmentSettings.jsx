@@ -26,6 +26,7 @@ function RecruitmentSettings({ guildId, canEdit }) {
     isPublic: false,
     description: '',
     focus: 'PvE',
+    activityTimes: '',
     requirements: [],
     applicationQuestions: [],
   })
@@ -152,6 +153,16 @@ function RecruitmentSettings({ guildId, canEdit }) {
               disabled={!canEdit}
               onChange={(e) => setSettings({ ...settings, description: e.target.value })}
               placeholder="Tell prospective members what your guild is all about..."
+            />
+
+            <TextField
+              label="Activity Times"
+              fullWidth
+              value={settings.activityTimes}
+              disabled={!canEdit}
+              onChange={(e) => setSettings({ ...settings, activityTimes: e.target.value })}
+              placeholder="e.g. Weeknights 8pm-10pm EST, Weekends all day..."
+              helperText="When is your guild most active?"
             />
 
             <Divider />
