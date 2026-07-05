@@ -202,6 +202,12 @@ const tableInfos = {
   tracked_members: db.pragma('table_info(tracked_members)'),
   guild_invites: db.pragma('table_info(guild_invites)'),
   guild_recruitment_settings: db.pragma('table_info(guild_recruitment_settings)'),
+  guild_ranks: db.pragma('table_info(guild_ranks)'),
+  characters: db.pragma('table_info(characters)'),
+  audit_logs: db.pragma('table_info(audit_logs)'),
+  applications: db.pragma('table_info(applications)'),
+  email_verification_tokens: db.pragma('table_info(email_verification_tokens)'),
+  password_reset_tokens: db.pragma('table_info(password_reset_tokens)'),
 }
 
 const ensureColumn = (table, column, definition) => {
@@ -230,6 +236,16 @@ ensureColumn('tracked_members', 'last_active_at', 'TEXT')
 ensureColumn('guild_invites', 'single_use', 'INTEGER NOT NULL DEFAULT 1')
 ensureColumn('guild_invites', 'expires_at', 'TEXT')
 ensureColumn('guild_recruitment_settings', 'activity_times', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('characters', 'class', 'TEXT NOT NULL')
+ensureColumn('characters', 'role', 'TEXT NOT NULL')
+ensureColumn('characters', 'level', 'INTEGER NOT NULL DEFAULT 50')
+ensureColumn('characters', 'is_primary', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('guild_ranks', 'weight', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('guild_ranks', 'permissions', "TEXT NOT NULL DEFAULT '{}'")
+ensureColumn('audit_logs', 'details', "TEXT NOT NULL DEFAULT '{}'")
+ensureColumn('applications', 'status', "TEXT NOT NULL DEFAULT 'pending'")
+ensureColumn('applications', 'answers', "TEXT NOT NULL DEFAULT '[]'")
+ensureColumn('applications', 'reviewer_notes', "TEXT NOT NULL DEFAULT ''")
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
@@ -648,7 +664,7 @@ app.post('/api/guilds', requireAuth, (req, res, next) => {
     const id = crypto.randomUUID()
     statements.createGuild.run({ id, userId: req.user.id, name, weekStartDate: req.body.weekStartDate || new Date().toISOString().slice(0, 10), dueScheme: req.body.dueScheme || 'monthly', defaultDuesAmount: Number(req.body.defaultDuesAmount) || 0 })
     statements.createGuildMember.run(id, req.user.id, 'owner')
-    statements.createRecruitmentSettings.run({ guildId: id, isPublic: 0, description: '', focus: 'PvE', requirements: '[]', applicationQuestions: '[]' })
+    statements.createRecruitmentSettings.run({ guildId: id, isPublic: 0, description: '', focus: 'PvE', activityTimes: '', requirements: '[]', applicationQuestions: '[]' })
     writeAuditLog({ actorUserId: req.user.id, action: 'guild.create', entityType: 'guild', entityId: id, details: { name } })
     scheduleBackup('guild-create')
     res.status(201).json({ user: serializeUser(req.user.id) })
