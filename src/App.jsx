@@ -964,6 +964,7 @@ function App() {
   const ledgerSavedViewScope = getLedgerSavedViewScope({ sessionUser, guildId: selectedGuild?.id })
   const scopedSavedLedgerViews = savedLedgerViews[ledgerSavedViewScope] ?? []
   const canEditSelectedGuild = !sessionUser || Boolean(selectedGuild?.canEdit)
+  const canManageEventsSelectedGuild = !sessionUser || Boolean(selectedGuild?.canManageEvents)
 
   const activeEntries = useMemo(
     () => (sessionUser ? selectedGuild?.entries ?? [] : guestState.entries),
@@ -2441,7 +2442,7 @@ function App() {
               {sessionUser ? (
                 <Tabs
                   ref={pageTabsRef}
-                  value={['ledger', 'dues', 'member-management', 'recruitment', 'my-applications'].includes(currentPage) ? currentPage : false}
+                  value={['ledger', 'calendar', 'dues', 'member-management', 'recruitment', 'my-applications'].includes(currentPage) ? currentPage : false}
                   onChange={(_event, value) => {
                     setCurrentPage(value)
                     setDiscoveryGuildId(null)
@@ -2449,6 +2450,7 @@ function App() {
                   sx={{ minHeight: 48 }}
                 >
                   <Tab value="ledger" label="Ledger" />
+                  <Tab value="calendar" label="Calendar" />
                   <Tab value="dues" label="Dues" />
                   <Tab value="member-management" label="Members" />
                   <Tab value="recruitment" label="Recruitment" />
@@ -3170,6 +3172,14 @@ function App() {
                 onUpdateGuildDuesSettings={handleUpdateGuildDueSettings}
                 onUpdateTrackedMember={handleUpdateTrackedMember}
                 fmtGold={fmtGold}
+              />
+            )}
+
+            {currentPage === 'calendar' && sessionUser && selectedGuild && (
+              <CalendarPage
+                selectedGuild={selectedGuild}
+                trackedMembers={trackedMembers}
+                canEdit={canManageEventsSelectedGuild}
               />
             )}
 
