@@ -3294,6 +3294,7 @@ function App() {
               <MemberManagementPage
                 selectedGuild={selectedGuild}
                 trackedMembers={trackedMembers}
+                ranks={selectedGuild?.ranks || []}
                 controlsRef={memberManagementControlsRef}
                 tableRef={memberManagementRosterRef}
                 mutationPending={mutationPending}

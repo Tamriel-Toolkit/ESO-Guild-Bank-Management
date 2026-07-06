@@ -79,4 +79,38 @@ describe('MemberManagementPage', () => {
     expect(screen.getByText('Viewer access is read-only. Only admins and owners can update the roster.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add Member' })).toBeDisabled()
   })
+
+  it('renders ranks in the rank selection dropdowns', async () => {
+    const user = userEvent.setup()
+    const ranks = [
+      { id: 'rank-1', name: 'Officer' },
+      { id: 'rank-2', name: 'Veteran' },
+    ]
+
+    renderPage({
+      ranks,
+      trackedMembers: [
+        { id: 'member-1', name: 'Alice', rankId: 'rank-1', isActive: true },
+      ],
+    })
+
+    // Check rank for new member draft
+    const newMemberRankSelect = screen.getByLabelText('Rank')
+    await user.click(newMemberRankSelect)
+    expect(screen.getByRole('option', { name: 'Officer' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Veteran' })).toBeInTheDocument()
+
+    // Close the select menu to avoid interference with the next check
+    await user.keyboard('{Escape}')
+
+    // Check rank for existing member in the table
+    // The Select in the table doesn't have a label, so we find it by its current value or within the row
+    const row = screen.getByRole('row', { name: /Alice/ })
+    const memberRankSelect = within(row).getByRole('combobox')
+    await user.click(memberRankSelect)
+
+    // MUI Select uses a portal for options, so they might be anywhere in the document
+    expect(screen.getByRole('option', { name: 'Officer' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Veteran' })).toBeInTheDocument()
+  })
 })
