@@ -152,8 +152,9 @@ function MemberManagementPage({
               }
             />
             <FormControl sx={{ minWidth: 180 }}>
-              <InputLabel>Rank</InputLabel>
+              <InputLabel id="new-member-rank-label">Rank</InputLabel>
               <Select
+                labelId="new-member-rank-label"
                 label="Rank"
                 value={newMemberDraft.rankId}
                 onChange={(e) => setNewMemberDraft(p => ({ ...p, rankId: e.target.value }))}
