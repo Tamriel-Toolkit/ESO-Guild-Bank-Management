@@ -8,8 +8,8 @@ test('full recruitment and application workflow', async ({ page, context }) => {
 
   // 1. Owner Sign Up
   await page.goto('/')
-  await page.getByRole('button', { name: 'Sign up / Log in' }).click()
-  await page.getByRole('button', { name: 'Need an account?' }).click()
+  // Use the "Get Started" button on the WelcomePage
+  await page.getByRole('button', { name: 'Get Started' }).click()
   await page.getByLabel('Username').fill(ownerUsername)
   await page.getByLabel('Recovery Email').fill(`${ownerUsername}@example.com`)
   await page.getByLabel('Password', { exact: true }).fill('password1234')
@@ -36,11 +36,11 @@ test('full recruitment and application workflow', async ({ page, context }) => {
   await expect(page.getByText('Recruitment settings saved successfully')).toBeVisible()
 
   await page.getByRole('button', { name: 'Log out' }).click()
-  await expect(page.getByRole('button', { name: 'Sign up / Log in' })).toBeVisible()
+  // Should be back on the WelcomePage
+  await expect(page.getByText('Master Your Guild\'s Fortune')).toBeVisible()
 
   // 4. Applicant Sign Up
-  await page.getByRole('button', { name: 'Sign up / Log in' }).click()
-  await page.getByRole('button', { name: 'Need an account?' }).click()
+  await page.getByRole('button', { name: 'Get Started' }).click()
   await page.getByLabel('Username').fill(applicantUsername)
   await page.getByLabel('Recovery Email').fill(`${applicantUsername}@example.com`)
   await page.getByLabel('Password', { exact: true }).fill('password1234')
@@ -48,8 +48,10 @@ test('full recruitment and application workflow', async ({ page, context }) => {
   await expect(page.getByText('Account created')).toBeVisible()
 
   // 5. Discover and Apply
-  await page.getByRole('button', { name: 'Browse Guilds' }).click()
-  await expect(page.getByRole('heading', { name: 'Guild Discovery' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Ledger' }).click() // Transition to discovery from a logged in state normally requires clicking a tab or link
+  await page.getByRole('button', { name: 'Browse Guilds' }).first().click()
+  // Use first() to avoid ambiguity because both hero and discovery page have this title
+  await expect(page.getByRole('heading', { name: 'Guild Discovery' }).first()).toBeVisible()
 
   // Find the specific guild card to avoid clicking on others from previous runs
   const guildCard = page.locator('.MuiCard-root').filter({ hasText: guildName })
@@ -71,7 +73,7 @@ test('full recruitment and application workflow', async ({ page, context }) => {
   await page.getByRole('button', { name: 'Log out' }).click()
 
   // 7. Owner Review
-  await page.getByRole('button', { name: 'Sign up / Log in' }).click()
+  await page.getByRole('button', { name: 'Sign In' }).click()
   await page.getByLabel('Username').fill(ownerUsername)
   await page.getByLabel('Password').fill('password1234')
   await page.getByRole('button', { name: 'Log in' }).click()
