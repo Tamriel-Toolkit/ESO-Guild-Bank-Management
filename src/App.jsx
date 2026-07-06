@@ -126,6 +126,7 @@ import SettingsDialog from './components/SettingsDialog'
 import RankManagementDialog from "./components/RankManagementDialog"
 import CharacterManagementDialog from "./components/CharacterManagementDialog"
 import Graph from './components/Graph'
+import WelcomePage from './components/WelcomePage'
 import TutorialOverlay from './components/TutorialOverlay'
 import { exportReportBundle, getOverallCurrentGold } from './reportExports'
 import { formatDisplayDate } from './utils/dateFormatting'
@@ -944,7 +945,7 @@ function App() {
   const [rankManagementOpen, setRankManagementOpen] = useState(false)
   const [characterManagementOpen, setCharacterManagementOpen] = useState(false)
   const [selectedMemberForCharacters, setSelectedMemberForCharacters] = useState(null)
-  const [currentPage, setCurrentPage] = useState('ledger')
+  const [currentPage, setCurrentPage] = useState('welcome')
   const [discoveryGuildId, setDiscoveryGuildId] = useState(null)
   const [recruitmentTab, setRecruitmentTab] = useState('settings')
   const [webhooks, setWebhooks] = useState([])
@@ -1195,8 +1196,14 @@ function App() {
   }, [savedLedgerViews])
 
   useEffect(() => {
-    if (!sessionUser && currentPage !== 'ledger') {
+    if (sessionUser && currentPage === 'welcome') {
       setCurrentPage('ledger')
+    }
+  }, [currentPage, sessionUser])
+
+  useEffect(() => {
+    if (!sessionUser && !['welcome', 'ledger', 'discovery'].includes(currentPage)) {
+      setCurrentPage('welcome')
     }
   }, [currentPage, sessionUser])
 
@@ -2412,63 +2419,96 @@ function App() {
 
         <Box sx={{ display: 'flex' }}>
           <Box sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, sm: 3 } }}>
-            <Box ref={heroRef} className="eso-hero-banner">
-              <Typography variant="overline" className="eso-hero-kicker">
-                Elder Scrolls Online Guild Ledger
-              </Typography>
-              <Typography variant="h4" gutterBottom className="eso-hero-title">
-                {currentPage === 'ledger'
-                  ? 'Track Guild Gold Flow'
-                  : currentPage === 'dues'
-                    ? 'Dues Dashboard'
-                    : 'Member Management'}
-              </Typography>
-              <Typography variant="body1" className="eso-hero-subtitle">
-                {currentPage === 'ledger'
-                  ? 'Track deposits, withdrawals, and sales tax with member-linked entries.'
-                  : currentPage === 'dues'
-                    ? 'Manage guild dues settings and review the current cycle.'
-                    : 'Add members, update names, and keep the roster current.'}
-              </Typography>
-            </Box>
+            {currentPage === 'welcome' && !sessionUser && (
+              <WelcomePage
+                onOpenAuth={(mode) => {
+                  setAuthMode(mode)
+                  setAuthOpen(true)
+                }}
+                onNavigate={(page) => {
+                  setCurrentPage(page)
+                  setDiscoveryGuildId(null)
+                }}
+              />
+            )}
 
-            <Stack
-              direction={{ xs: 'column', md: 'row' }}
-              spacing={2}
-              justifyContent="space-between"
-              alignItems={{ xs: 'stretch', md: 'center' }}
-              sx={{ mb: 3 }}
-            >
-              {sessionUser ? (
-                <Tabs
-                  ref={pageTabsRef}
-                  value={['ledger', 'calendar', 'dues', 'member-management', 'recruitment', 'my-applications'].includes(currentPage) ? currentPage : false}
-                  onChange={(_event, value) => {
-                    setCurrentPage(value)
-                    setDiscoveryGuildId(null)
-                  }}
-                  sx={{ minHeight: 48 }}
+            {currentPage !== 'welcome' && (
+              <>
+                <Box ref={heroRef} className="eso-hero-banner">
+                  <Typography variant="overline" className="eso-hero-kicker">
+                    Elder Scrolls Online Guild Ledger
+                  </Typography>
+                  <Typography variant="h4" gutterBottom className="eso-hero-title">
+                    {currentPage === 'ledger'
+                      ? 'Track Guild Gold Flow'
+                      : currentPage === 'dues'
+                        ? 'Dues Dashboard'
+                        : currentPage === 'member-management'
+                          ? 'Member Management'
+                          : currentPage === 'calendar'
+                            ? 'Event Calendar'
+                            : currentPage === 'recruitment'
+                              ? 'Guild Recruitment'
+                              : currentPage === 'discovery'
+                                ? 'Guild Discovery'
+                                : 'My Applications'}
+                  </Typography>
+                  <Typography variant="body1" className="eso-hero-subtitle">
+                    {currentPage === 'ledger'
+                      ? 'Track deposits, withdrawals, and sales tax with member-linked entries.'
+                      : currentPage === 'dues'
+                        ? 'Manage guild dues settings and review the current cycle.'
+                        : currentPage === 'member-management'
+                          ? 'Add members, update names, and keep the roster current.'
+                          : currentPage === 'calendar'
+                            ? 'Schedule trials, raids, and social events for your guild.'
+                            : currentPage === 'recruitment'
+                              ? 'Configure your public profile and manage member applications.'
+                              : currentPage === 'discovery'
+                                ? 'Browse recruiting guilds and find your next home in Tamriel.'
+                                : 'Track the status of your sent guild applications.'}
+                  </Typography>
+                </Box>
+
+                <Stack
+                  direction={{ xs: 'column', md: 'row' }}
+                  spacing={2}
+                  justifyContent="space-between"
+                  alignItems={{ xs: 'stretch', md: 'center' }}
+                  sx={{ mb: 3 }}
                 >
-                  <Tab value="ledger" label="Ledger" />
-                  <Tab value="calendar" label="Calendar" />
-                  <Tab value="dues" label="Dues" />
-                  <Tab value="member-management" label="Members" />
-                  <Tab value="recruitment" label="Recruitment" />
-                  <Tab value="my-applications" label="My Apps" />
-                </Tabs>
-              ) : (
-                <Box />
-              )}
+                  {sessionUser ? (
+                    <Tabs
+                      ref={pageTabsRef}
+                      value={['ledger', 'calendar', 'dues', 'member-management', 'recruitment', 'my-applications'].includes(currentPage) ? currentPage : false}
+                      onChange={(_event, value) => {
+                        setCurrentPage(value)
+                        setDiscoveryGuildId(null)
+                      }}
+                      sx={{ minHeight: 48 }}
+                    >
+                      <Tab value="ledger" label="Ledger" />
+                      <Tab value="calendar" label="Calendar" />
+                      <Tab value="dues" label="Dues" />
+                      <Tab value="member-management" label="Members" />
+                      <Tab value="recruitment" label="Recruitment" />
+                      <Tab value="my-applications" label="My Apps" />
+                    </Tabs>
+                  ) : (
+                    <Box />
+                  )}
 
-              <Button
-                variant="outlined"
-                onClick={openExportDialog}
-                disabled={mutationPending || (sessionUser && !selectedGuild)}
-                sx={{ alignSelf: { xs: 'stretch', md: 'center' } }}
-              >
-                Export Reports
-              </Button>
-            </Stack>
+                  <Button
+                    variant="outlined"
+                    onClick={openExportDialog}
+                    disabled={mutationPending || (sessionUser && !selectedGuild)}
+                    sx={{ alignSelf: { xs: 'stretch', md: 'center' } }}
+                  >
+                    Export Reports
+                  </Button>
+                </Stack>
+              </>
+            )}
 
             <Stack spacing={2} sx={{ mb: 3 }}>
               {sessionLoading && <Alert severity="info">Restoring your secure session...</Alert>}
