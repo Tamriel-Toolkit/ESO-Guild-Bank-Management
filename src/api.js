@@ -303,6 +303,25 @@ export const reviewApplication = (guildId, applicationId, payload) =>
 
 export const getMyApplications = () => apiRequest('/api/my-applications')
 
+export const getWebhooksForGuild = (guildId) => apiRequest(`/api/guilds/${guildId}/webhooks`)
+
+export const createWebhookForGuild = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/webhooks`, {
+    method: 'POST',
+    body: payload,
+  })
+
+export const updateWebhookInGuild = (guildId, webhookId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/webhooks/${webhookId}`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
+export const deleteWebhookFromGuild = (guildId, webhookId) =>
+  apiRequest(`/api/guilds/${guildId}/webhooks/${webhookId}`, {
+    method: 'DELETE',
+  })
+
 export const getEventsForGuild = (guildId, start, end) =>
   apiRequest(`/api/guilds/${guildId}/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
 
