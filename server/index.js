@@ -200,6 +200,8 @@ const tableInfos = {
   entries: db.pragma('table_info(entries)'),
   guild_members: db.pragma('table_info(guild_members)'),
   tracked_members: db.pragma('table_info(tracked_members)'),
+  events: db.pragma('table_info(events)'),
+  event_signups: db.pragma('table_info(event_signups)'),
   guild_invites: db.pragma('table_info(guild_invites)'),
   guild_recruitment_settings: db.pragma('table_info(guild_recruitment_settings)'),
   guild_ranks: db.pragma('table_info(guild_ranks)'),
@@ -269,6 +271,41 @@ db.prepare(
    SELECT id FROM guilds`,
 ).run()
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    max_participants INTEGER NOT NULL DEFAULT 0,
+    event_type TEXT NOT NULL DEFAULT 'standard',
+    recurrence_rule TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS event_signups (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    occurrence_date TEXT NOT NULL,
+    tracked_member_id TEXT NOT NULL,
+    character_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    role TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
+    FOREIGN KEY (tracked_member_id) REFERENCES tracked_members (id) ON DELETE CASCADE,
+    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE,
+    UNIQUE(event_id, occurrence_date, tracked_member_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_events_guild_id ON events (guild_id);
+  CREATE INDEX IF NOT EXISTS idx_event_signups_event_id ON event_signups (event_id);
+  CREATE INDEX IF NOT EXISTS idx_event_signups_member_id ON event_signups (tracked_member_id);
+`)
+
 const statements = {
   createUser: db.prepare(`INSERT INTO users (username, email, password_hash, password_salt) VALUES (@username, @email, @passwordHash, @passwordSalt)`),
   findUserByUsername: db.prepare('SELECT * FROM users WHERE username = ?'),
@@ -322,6 +359,31 @@ const statements = {
   createRank: db.prepare('INSERT INTO guild_ranks (id, guild_id, name, weight, permissions) VALUES (@id, @guildId, @name, @weight, @permissions)'),
   updateRank: db.prepare('UPDATE guild_ranks SET name = @name, weight = @weight, permissions = @permissions WHERE id = @id AND guild_id = @guildId'),
   deleteRank: db.prepare('DELETE FROM guild_ranks WHERE id = ? AND guild_id = ?'),
+  listEventsForGuild: db.prepare('SELECT id, guild_id AS guildId, title, description, start_time AS startTime, end_time AS endTime, max_participants AS maxParticipants, event_type AS eventType, recurrence_rule AS recurrenceRule FROM events WHERE guild_id = ?'),
+  createEvent: db.prepare('INSERT INTO events (id, guild_id, title, description, start_time, end_time, max_participants, event_type, recurrence_rule) VALUES (@id, @guildId, @title, @description, @startTime, @endTime, @maxParticipants, @eventType, @recurrenceRule)'),
+  updateEvent: db.prepare('UPDATE events SET title = @title, description = @description, start_time = @startTime, end_time = @endTime, max_participants = @maxParticipants, event_type = @eventType, recurrence_rule = @recurrenceRule WHERE id = @id AND guild_id = @guildId'),
+  deleteEvent: db.prepare('DELETE FROM events WHERE id = ? AND guild_id = ?'),
+  listSignupsForEvent: db.prepare(`
+    SELECT s.id, s.event_id AS eventId, s.occurrence_date AS occurrenceDate, s.tracked_member_id AS trackedMemberId, s.character_id AS characterId, s.status, s.role, s.created_at AS createdAt, m.name AS memberName, c.name AS characterName, c.class AS characterClass
+    FROM event_signups s
+    JOIN tracked_members m ON m.id = s.tracked_member_id
+    JOIN characters c ON c.id = s.character_id
+    WHERE s.event_id = ? AND s.occurrence_date = ?
+    ORDER BY s.created_at ASC
+  `),
+  createSignup: db.prepare('INSERT INTO event_signups (id, event_id, occurrence_date, tracked_member_id, character_id, status, role) VALUES (@id, @eventId, @occurrenceDate, @trackedMemberId, @characterId, @status, @role)'),
+  updateSignup: db.prepare('UPDATE event_signups SET character_id = @characterId, role = @role, status = @status WHERE id = @id'),
+  deleteSignup: db.prepare('DELETE FROM event_signups WHERE id = ?'),
+  countConfirmedSignups: db.prepare("SELECT COUNT(*) as count FROM event_signups WHERE event_id = ? AND occurrence_date = ? AND status = 'confirmed'"),
+  promoteWaitlist: db.prepare(`
+    UPDATE event_signups
+    SET status = 'confirmed'
+    WHERE id = (
+      SELECT id FROM event_signups
+      WHERE event_id = ? AND occurrence_date = ? AND status = 'waitlist'
+      ORDER BY created_at ASC LIMIT 1
+    )
+  `),
   listCharactersForMember: db.prepare('SELECT id, tracked_member_id AS trackedMemberId, name, class, role, level, is_primary AS isPrimary FROM characters WHERE tracked_member_id = ? ORDER BY is_primary DESC, name ASC'),
   createCharacter: db.prepare('INSERT INTO characters (id, tracked_member_id, name, class, role, level, is_primary) VALUES (@id, @trackedMemberId, @name, @class, @role, @level, @isPrimary)'),
   clearPrimaryCharactersForMember: db.prepare('UPDATE characters SET is_primary = 0 WHERE tracked_member_id = ?'),
@@ -486,27 +548,36 @@ function writeAuditLog({ actorUserId = null, action, entityType, entityId = null
 function serializeUser(userId) {
   const user = statements.findUserById.get(userId)
   if (!user) return null
-  const guilds = statements.listGuildsForUser.all(userId).map(g => ({
-    ...g,
-    dueScheme: g.dueScheme === 'weekly' ? 'weekly' : 'monthly',
-    defaultDuesAmount: Number(g.defaultDuesAmount) || 0,
-    role: g.membershipRole,
-    isOwner: g.ownerUserId === userId,
-    canEdit: ['admin', 'owner'].includes(g.membershipRole),
-    canManagePermissions: g.membershipRole === 'owner',
-    canDelete: g.membershipRole === 'owner',
-    members: statements.listGuildMembersForGuild.all(g.id).map(m => ({ ...m, isOwner: Boolean(m.isOwner) })),
-    ranks: statements.listRanksForGuild.all(g.id).map(r => ({ ...r, permissions: JSON.parse(r.permissions) })),
-    trackedMembers: statements.listTrackedMembersForGuild.all(g.id).map(m => ({
+  const guilds = statements.listGuildsForUser.all(userId).map(g => {
+    const ranks = statements.listRanksForGuild.all(g.id).map(r => ({ ...r, permissions: JSON.parse(r.permissions) }))
+    const trackedMembers = statements.listTrackedMembersForGuild.all(g.id).map(m => ({
       ...m,
       duePeriod: m.duePeriod === 'weekly' ? 'weekly' : 'monthly',
       useDefaultDues: Boolean(m.useDefaultDues),
       duesExempt: Boolean(m.duesExempt),
       isActive: Boolean(m.isActive),
       characters: statements.listCharactersForMember.all(m.id).map(c => ({ ...c, isPrimary: Boolean(c.isPrimary) })),
-    })),
-    entries: statements.listEntriesForGuild.all(g.id),
-  }))
+    }))
+
+    const userTrackedMember = trackedMembers.find(m => m.userId === userId)
+    const permissions = userTrackedMember?.rankId ? ranks.find(r => r.id === userTrackedMember.rankId)?.permissions || {} : {}
+
+    return {
+      ...g,
+      dueScheme: g.dueScheme === 'weekly' ? 'weekly' : 'monthly',
+      defaultDuesAmount: Number(g.defaultDuesAmount) || 0,
+      role: g.membershipRole,
+      isOwner: g.ownerUserId === userId,
+      canEdit: ['admin', 'owner'].includes(g.membershipRole),
+      canManageEvents: ['admin', 'owner'].includes(g.membershipRole) || Boolean(permissions.canManageEvents),
+      canManagePermissions: g.membershipRole === 'owner',
+      canDelete: g.membershipRole === 'owner',
+      members: statements.listGuildMembersForGuild.all(g.id).map(m => ({ ...m, isOwner: Boolean(m.isOwner) })),
+      ranks,
+      trackedMembers,
+      entries: statements.listEntriesForGuild.all(g.id),
+    }
+  })
   const selectedGuildId = guilds.some(g => g.id === user.selected_guild_id) ? user.selected_guild_id : guilds[0]?.id ?? null
   if (selectedGuildId !== user.selected_guild_id) statements.updateUserSelectedGuild.run(selectedGuildId, userId)
   return { username: user.username, email: user.email || '', emailVerified: Boolean(user.email_verified_at), selectedGuildId, guilds }
@@ -546,6 +617,20 @@ function ensureGuildEditor(userId, guildId) {
 function ensureGuildOwner(userId, guildId) {
   const guild = ensureGuildForUser(userId, guildId)
   if (guild.membershipRole !== 'owner') throw createHttpError(403, 'Only the guild owner can manage sharing and member access for this guild.')
+  return guild
+}
+
+function ensureCanManageEvents(userId, guildId) {
+  const guild = ensureGuildForUser(userId, guildId)
+  if (['admin', 'owner'].includes(guild.membershipRole)) return guild
+
+  const ranks = statements.listRanksForGuild.all(guildId).map(r => ({ ...r, permissions: JSON.parse(r.permissions) }))
+  const trackedMember = statements.listTrackedMembersForGuild.all(guildId).find(m => m.userId === userId)
+  const permissions = trackedMember?.rankId ? ranks.find(r => r.id === trackedMember.rankId)?.permissions || {} : {}
+
+  if (!permissions.canManageEvents) {
+    throw createHttpError(403, 'You do not have permission to manage events for this guild.')
+  }
   return guild
 }
 
@@ -681,6 +766,144 @@ app.patch('/api/guilds/:guildId', requireAuth, (req, res, next) => {
     res.json({ user: serializeUser(req.user.id) })
   } catch (err) { next(err) }
 })
+
+app.get('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureGuildForUser(req.user.id, req.params.guildId)
+    const rawEvents = statements.listEventsForGuild.all(g.id)
+    const start = req.query.start, end = req.query.end
+    const events = expandRecurringEvents(rawEvents, start, end)
+    res.json({ events })
+  } catch (err) { next(err) }
+})
+
+app.post('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureCanManageEvents(req.user.id, req.params.guildId)
+    const id = crypto.randomUUID()
+    statements.createEvent.run({ id, guildId: g.id, title: req.body.title, description: req.body.description || '', startTime: req.body.startTime, endTime: req.body.endTime, maxParticipants: Number(req.body.maxParticipants) || 0, eventType: req.body.eventType || 'standard', recurrenceRule: req.body.recurrenceRule || null })
+    writeAuditLog({ actorUserId: req.user.id, action: 'event.create', entityType: 'event', entityId: id, details: { guildId: g.id, title: req.body.title } })
+    res.status(201).json({ id })
+  } catch (err) { next(err) }
+})
+
+app.patch('/api/guilds/:guildId/events/:eventId', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureCanManageEvents(req.user.id, req.params.guildId)
+    statements.updateEvent.run({ id: req.params.eventId, guildId: g.id, title: req.body.title, description: req.body.description || '', startTime: req.body.startTime, endTime: req.body.endTime, maxParticipants: Number(req.body.maxParticipants) || 0, eventType: req.body.eventType || 'standard', recurrenceRule: req.body.recurrenceRule || null })
+    writeAuditLog({ actorUserId: req.user.id, action: 'event.update', entityType: 'event', entityId: req.params.eventId, details: { guildId: g.id, title: req.body.title } })
+    res.json({ message: 'Event updated.' })
+  } catch (err) { next(err) }
+})
+
+app.delete('/api/guilds/:guildId/events/:eventId', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureCanManageEvents(req.user.id, req.params.guildId)
+    statements.deleteEvent.run(req.params.eventId, g.id)
+    writeAuditLog({ actorUserId: req.user.id, action: 'event.delete', entityType: 'event', entityId: req.params.eventId, details: { guildId: g.id } })
+    res.json({ message: 'Event deleted.' })
+  } catch (err) { next(err) }
+})
+
+app.get('/api/guilds/:guildId/events/:eventId/signups', requireAuth, (req, res, next) => {
+  try {
+    ensureGuildForUser(req.user.id, req.params.guildId)
+    const signups = statements.listSignupsForEvent.all(req.params.eventId, req.query.occurrenceDate)
+    res.json({ signups })
+  } catch (err) { next(err) }
+})
+
+app.post('/api/guilds/:guildId/events/:eventId/signups', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureGuildForUser(req.user.id, req.params.guildId)
+    const event = db.prepare('SELECT * FROM events WHERE id = ? AND guild_id = ?').get(req.params.eventId, g.id)
+    if (!event) throw createHttpError(404, 'Event not found.')
+
+    const count = statements.countConfirmedSignups.get(event.id, req.body.occurrenceDate).count
+    const status = (event.max_participants > 0 && count >= event.max_participants) ? 'waitlist' : 'confirmed'
+
+    const id = crypto.randomUUID()
+    statements.createSignup.run({ id, eventId: event.id, occurrenceDate: req.body.occurrenceDate, trackedMemberId: req.body.trackedMemberId, characterId: req.body.characterId, role: req.body.role, status })
+    res.status(201).json({ id, status })
+  } catch (err) { next(err) }
+})
+
+app.patch('/api/signups/:signupId', requireAuth, (req, res, next) => {
+  try {
+    // Permission check: either owner of signup or event manager
+    const signup = db.prepare('SELECT s.*, e.guild_id FROM event_signups s JOIN events e ON e.id = s.event_id WHERE s.id = ?').get(req.params.signupId)
+    if (!signup) throw createHttpError(404, 'Signup not found.')
+
+    // Check if user is the member in the signup
+    const member = statements.findTrackedMemberForGuild.get(signup.tracked_member_id, signup.guild_id)
+    const isOwner = member && member.userId === req.user.id
+
+    if (!isOwner) {
+       ensureCanManageEvents(req.user.id, signup.guild_id)
+    }
+
+    statements.updateSignup.run({ id: req.params.signupId, characterId: req.body.characterId || signup.character_id, role: req.body.role || signup.role, status: req.body.status || signup.status })
+    res.json({ message: 'Signup updated.' })
+  } catch (err) { next(err) }
+})
+
+app.delete('/api/signups/:signupId', requireAuth, (req, res, next) => {
+  try {
+    const signup = db.prepare('SELECT s.*, e.guild_id FROM event_signups s JOIN events e ON e.id = s.event_id WHERE s.id = ?').get(req.params.signupId)
+    if (!signup) throw createHttpError(404, 'Signup not found.')
+
+    const member = statements.findTrackedMemberForGuild.get(signup.tracked_member_id, signup.guild_id)
+    const isOwner = member && member.userId === req.user.id
+    if (!isOwner) {
+       ensureCanManageEvents(req.user.id, signup.guild_id)
+    }
+
+    statements.deleteSignup.run(req.params.signupId)
+
+    if (signup.status === 'confirmed') {
+       statements.promoteWaitlist.run(signup.event_id, signup.occurrence_date)
+    }
+
+    res.json({ message: 'Signup removed.' })
+  } catch (err) { next(err) }
+})
+
+function expandRecurringEvents(events, start, end) {
+  const occurrences = []
+  const startDate = new Date(start), endDate = new Date(end)
+
+  for (const event of events) {
+    if (!event.recurrenceRule) {
+      occurrences.push(event)
+      continue
+    }
+
+    const rule = JSON.parse(event.recurrenceRule)
+    let current = new Date(event.startTime)
+    const duration = new Date(event.endTime) - current
+
+    while (current <= endDate) {
+      if (current >= startDate) {
+        if (!rule.days || rule.days.includes(current.getUTCDay())) {
+          occurrences.push({
+            ...event,
+            startTime: current.toISOString(),
+            endTime: new Date(current.getTime() + duration).toISOString()
+          })
+        }
+      }
+
+      if (rule.frequency === 'daily') current.setUTCDate(current.getUTCDate() + 1)
+      else if (rule.frequency === 'weekly') current.setUTCDate(current.getUTCDate() + 1) // Check each day if in rule.days
+      else break
+
+      if (rule.frequency === 'weekly' && current.getUTCDay() === 0 && !rule.days) {
+         // Fallback if no days specified for weekly? Normally wouldn't happen
+      }
+    }
+  }
+  return occurrences
+}
 
 app.delete('/api/guilds/:guildId', requireAuth, (req, res, next) => {
   try {

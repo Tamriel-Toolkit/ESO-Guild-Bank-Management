@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   List,
   ListItem,
@@ -70,6 +72,18 @@ function RankManagementDialog({
               value={draft.weight}
               onChange={(e) => setDraft({ ...draft, weight: parseInt(e.target.value, 10) || 0 })}
               helperText="Lower numbers appear higher in lists."
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={Boolean(draft.permissions?.canManageEvents)}
+                  onChange={(e) => setDraft({
+                    ...draft,
+                    permissions: { ...draft.permissions, canManageEvents: e.target.checked }
+                  })}
+                />
+              }
+              label="Can Manage Events"
             />
             <Stack direction="row" spacing={1}>
               <Button variant="contained" size="small" onClick={handleSave} disabled={mutationPending}>
