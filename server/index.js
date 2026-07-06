@@ -193,27 +193,6 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
   );
-  CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT,
-    start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL,
-    recurrence_rule TEXT NOT NULL DEFAULT 'none',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
-  );
-  CREATE TABLE IF NOT EXISTS event_signups (
-    id TEXT PRIMARY KEY,
-    event_id TEXT NOT NULL,
-    user_id INTEGER NOT NULL,
-    occurrence_date TEXT NOT NULL,
-    role TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-  );
   CREATE TABLE IF NOT EXISTS guild_webhooks (
     id TEXT PRIMARY KEY,
     guild_id TEXT NOT NULL,
@@ -222,6 +201,37 @@ db.exec(`
     channel_name TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    max_participants INTEGER NOT NULL DEFAULT 0,
+    event_type TEXT NOT NULL DEFAULT 'standard',
+    recurrence_rule TEXT NOT NULL DEFAULT 'none',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS event_signups (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    user_id INTEGER,
+    occurrence_date TEXT NOT NULL,
+    tracked_member_id TEXT NOT NULL,
+    character_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    role TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL,
+    FOREIGN KEY (tracked_member_id) REFERENCES tracked_members (id) ON DELETE CASCADE,
+    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE,
+    UNIQUE(event_id, occurrence_date, tracked_member_id)
   );
 
 `)
@@ -242,8 +252,6 @@ const tableInfos = {
   applications: db.pragma('table_info(applications)'),
   email_verification_tokens: db.pragma('table_info(email_verification_tokens)'),
   password_reset_tokens: db.pragma('table_info(password_reset_tokens)'),
-  events: db.pragma('table_info(events)'),
-  event_signups: db.pragma('table_info(event_signups)'),
   guild_webhooks: db.pragma('table_info(guild_webhooks)'),
 }
 
@@ -284,6 +292,14 @@ ensureColumn('audit_logs', 'details', "TEXT NOT NULL DEFAULT '{}'")
 ensureColumn('applications', 'status', "TEXT NOT NULL DEFAULT 'pending'")
 ensureColumn('applications', 'answers', "TEXT NOT NULL DEFAULT '[]'")
 ensureColumn('applications', 'reviewer_notes', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('events', 'description', "TEXT NOT NULL DEFAULT ''")
+ensureColumn('events', 'max_participants', 'INTEGER NOT NULL DEFAULT 0')
+ensureColumn('events', 'event_type', "TEXT NOT NULL DEFAULT 'standard'")
+ensureColumn('events', 'recurrence_rule', "TEXT NOT NULL DEFAULT 'none'")
+ensureColumn('event_signups', 'user_id', 'INTEGER')
+ensureColumn('event_signups', 'tracked_member_id', 'TEXT NOT NULL')
+ensureColumn('event_signups', 'character_id', 'TEXT NOT NULL')
+ensureColumn('event_signups', 'status', "TEXT NOT NULL DEFAULT 'confirmed'")
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions (token_hash);
@@ -311,40 +327,6 @@ db.prepare(
    SELECT id FROM guilds`,
 ).run()
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS events (
-    id TEXT PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    start_time TEXT NOT NULL,
-    end_time TEXT NOT NULL,
-    max_participants INTEGER NOT NULL DEFAULT 0,
-    event_type TEXT NOT NULL DEFAULT 'standard',
-    recurrence_rule TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS event_signups (
-    id TEXT PRIMARY KEY,
-    event_id TEXT NOT NULL,
-    occurrence_date TEXT NOT NULL,
-    tracked_member_id TEXT NOT NULL,
-    character_id TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'confirmed',
-    role TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE,
-    FOREIGN KEY (tracked_member_id) REFERENCES tracked_members (id) ON DELETE CASCADE,
-    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE,
-    UNIQUE(event_id, occurrence_date, tracked_member_id)
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_events_guild_id ON events (guild_id);
-  CREATE INDEX IF NOT EXISTS idx_event_signups_event_id ON event_signups (event_id);
-  CREATE INDEX IF NOT EXISTS idx_event_signups_member_id ON event_signups (tracked_member_id);
-`)
 
 const statements = {
   createUser: db.prepare(`INSERT INTO users (username, email, password_hash, password_salt) VALUES (@username, @email, @passwordHash, @passwordSalt)`),
@@ -491,20 +473,7 @@ const statements = {
      ORDER BY applications.created_at DESC`,
   ),
   updateGuildLastSummary: db.prepare('UPDATE guilds SET last_summary_at = ? WHERE id = ?'),
-  listEventsForGuild: db.prepare('SELECT * FROM events WHERE guild_id = ?'),
-  createEvent: db.prepare('INSERT INTO events (id, guild_id, title, description, start_time, end_time, recurrence_rule) VALUES (@id, @guildId, @title, @description, @startTime, @endTime, @recurrenceRule)'),
-  updateEvent: db.prepare('UPDATE events SET title = @title, description = @description, start_time = @startTime, end_time = @endTime, recurrence_rule = @recurrenceRule WHERE id = @id AND guild_id = @guildId'),
-  deleteEvent: db.prepare('DELETE FROM events WHERE id = ? AND guild_id = ?'),
   findEventById: db.prepare('SELECT * FROM events WHERE id = ?'),
-  listSignupsForEvent: db.prepare(`
-    SELECT s.id, s.event_id AS eventId, s.user_id AS userId, s.occurrence_date AS occurrenceDate, s.role, s.created_at AS createdAt, u.username
-    FROM event_signups s
-    JOIN users u ON u.id = s.user_id
-    WHERE s.event_id = ? AND s.occurrence_date = ?
-  `),
-  createSignup: db.prepare('INSERT INTO event_signups (id, event_id, user_id, occurrence_date, role) VALUES (@id, @eventId, @userId, @occurrenceDate, @role)'),
-  updateSignup: db.prepare('UPDATE event_signups SET role = @role WHERE id = @id AND user_id = @userId'),
-  deleteSignup: db.prepare('DELETE FROM event_signups WHERE id = ? AND user_id = ?'),
   findSignupById: db.prepare('SELECT * FROM event_signups WHERE id = ?'),
   listWebhooksForGuild: db.prepare('SELECT * FROM guild_webhooks WHERE guild_id = ?'),
   findWebhookById: db.prepare('SELECT * FROM guild_webhooks WHERE id = ?'),
@@ -833,17 +802,15 @@ function verifyPassword(p, u) {
 
 function expandRecurringEvents(event, startLimit, endLimit) {
   const instances = []
-  const eventStart = new Date(event.start_time)
-  const eventEnd = new Date(event.end_time)
+  const eventStart = new Date(event.startTime)
+  const eventEnd = new Date(event.endTime)
   const duration = eventEnd.getTime() - eventStart.getTime()
 
-  if (event.recurrence_rule === 'none') {
-    if (event.start_time < endLimit && event.end_time > startLimit) {
+  if (event.recurrenceRule === 'none' || !event.recurrenceRule) {
+    if (event.startTime < endLimit && event.endTime > startLimit) {
       instances.push({
         ...event,
-        startTime: event.start_time,
-        endTime: event.end_time,
-        occurrenceDate: event.start_time.slice(0, 10),
+        occurrenceDate: event.startTime.slice(0, 10),
       })
     }
     return instances
@@ -866,9 +833,9 @@ function expandRecurringEvents(event, startLimit, endLimit) {
       })
     }
 
-    if (event.recurrence_rule === 'daily') {
+    if (event.recurrenceRule === 'daily') {
       current.setDate(current.getDate() + 1)
-    } else if (event.recurrence_rule === 'weekly') {
+    } else if (event.recurrenceRule === 'weekly') {
       current.setDate(current.getDate() + 7)
     } else {
       break
@@ -1003,10 +970,11 @@ app.patch('/api/guilds/:guildId', requireAuth, (req, res, next) => {
 app.get('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
   try {
     const g = ensureGuildForUser(req.user.id, req.params.guildId)
+    const start = req.query.start || new Date(0).toISOString()
+    const end = req.query.end || new Date(Date.now() + 31536000000).toISOString()
     const rawEvents = statements.listEventsForGuild.all(g.id)
-    const start = req.query.start, end = req.query.end
-    const events = expandRecurringEvents(rawEvents, start, end)
-    res.json({ events })
+    const events = rawEvents.flatMap(e => expandRecurringEvents(e, start, end))
+    res.json({ events: events.sort((a, b) => a.startTime.localeCompare(b.startTime)) })
   } catch (err) { next(err) }
 })
 
@@ -1014,8 +982,29 @@ app.post('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
   try {
     const g = ensureCanManageEvents(req.user.id, req.params.guildId)
     const id = crypto.randomUUID()
-    statements.createEvent.run({ id, guildId: g.id, title: req.body.title, description: req.body.description || '', startTime: req.body.startTime, endTime: req.body.endTime, maxParticipants: Number(req.body.maxParticipants) || 0, eventType: req.body.eventType || 'standard', recurrenceRule: req.body.recurrenceRule || null })
+    statements.createEvent.run({
+      id,
+      guildId: g.id,
+      title: req.body.title,
+      description: req.body.description || '',
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
+      maxParticipants: Number(req.body.maxParticipants) || 0,
+      eventType: req.body.eventType || 'standard',
+      recurrenceRule: req.body.recurrenceRule || 'none'
+    })
     writeAuditLog({ actorUserId: req.user.id, action: 'event.create', entityType: 'event', entityId: id, details: { guildId: g.id, title: req.body.title } })
+    webhookEmitter.emit('event', {
+      guildId: g.id,
+      eventType: 'event_created',
+      data: {
+        title: req.body.title,
+        description: req.body.description,
+        startTime: req.body.startTime,
+        endTime: req.body.endTime,
+        recurrenceRule: req.body.recurrenceRule || 'none',
+      }
+    })
     res.status(201).json({ id })
   } catch (err) { next(err) }
 })
@@ -1023,7 +1012,17 @@ app.post('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
 app.patch('/api/guilds/:guildId/events/:eventId', requireAuth, (req, res, next) => {
   try {
     const g = ensureCanManageEvents(req.user.id, req.params.guildId)
-    statements.updateEvent.run({ id: req.params.eventId, guildId: g.id, title: req.body.title, description: req.body.description || '', startTime: req.body.startTime, endTime: req.body.endTime, maxParticipants: Number(req.body.maxParticipants) || 0, eventType: req.body.eventType || 'standard', recurrenceRule: req.body.recurrenceRule || null })
+    statements.updateEvent.run({
+      id: req.params.eventId,
+      guildId: g.id,
+      title: req.body.title,
+      description: req.body.description || '',
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
+      maxParticipants: Number(req.body.maxParticipants) || 0,
+      eventType: req.body.eventType || 'standard',
+      recurrenceRule: req.body.recurrenceRule || 'none'
+    })
     writeAuditLog({ actorUserId: req.user.id, action: 'event.update', entityType: 'event', entityId: req.params.eventId, details: { guildId: g.id, title: req.body.title } })
     res.json({ message: 'Event updated.' })
   } catch (err) { next(err) }
@@ -1101,42 +1100,6 @@ app.delete('/api/signups/:signupId', requireAuth, (req, res, next) => {
   } catch (err) { next(err) }
 })
 
-function expandRecurringEvents(events, start, end) {
-  const occurrences = []
-  const startDate = new Date(start), endDate = new Date(end)
-
-  for (const event of events) {
-    if (!event.recurrenceRule) {
-      occurrences.push(event)
-      continue
-    }
-
-    const rule = JSON.parse(event.recurrenceRule)
-    let current = new Date(event.startTime)
-    const duration = new Date(event.endTime) - current
-
-    while (current <= endDate) {
-      if (current >= startDate) {
-        if (!rule.days || rule.days.includes(current.getUTCDay())) {
-          occurrences.push({
-            ...event,
-            startTime: current.toISOString(),
-            endTime: new Date(current.getTime() + duration).toISOString()
-          })
-        }
-      }
-
-      if (rule.frequency === 'daily') current.setUTCDate(current.getUTCDate() + 1)
-      else if (rule.frequency === 'weekly') current.setUTCDate(current.getUTCDate() + 1) // Check each day if in rule.days
-      else break
-
-      if (rule.frequency === 'weekly' && current.getUTCDay() === 0 && !rule.days) {
-         // Fallback if no days specified for weekly? Normally wouldn't happen
-      }
-    }
-  }
-  return occurrences
-}
 
 app.delete('/api/guilds/:guildId', requireAuth, (req, res, next) => {
   try {
@@ -1528,113 +1491,6 @@ app.get('/api/my-applications', requireAuth, (request, response, next) => {
   } catch (error) {
     next(error)
   }
-})
-
-app.get('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
-  try {
-    const g = ensureGuildForUser(req.user.id, req.params.guildId)
-    const start = req.query.start || new Date(0).toISOString()
-    const end = req.query.end || new Date(Date.now() + 31536000000).toISOString()
-    const baseEvents = statements.listEventsForGuild.all(g.id)
-    const instances = baseEvents.flatMap(e => expandRecurringEvents(e, start, end))
-    res.json({ events: instances.sort((a, b) => a.startTime.localeCompare(b.startTime)) })
-  } catch (err) { next(err) }
-})
-
-app.post('/api/guilds/:guildId/events', requireAuth, (req, res, next) => {
-  try {
-    const g = ensureGuildEditor(req.user.id, req.params.guildId)
-    const id = crypto.randomUUID()
-    statements.createEvent.run({
-      id,
-      guildId: g.id,
-      title: sanitizeText(req.body.title, 100),
-      description: sanitizeText(req.body.description, 1000),
-      startTime: req.body.startTime,
-      endTime: req.body.endTime,
-      recurrenceRule: req.body.recurrenceRule || 'none'
-    })
-    writeAuditLog({ actorUserId: req.user.id, action: 'event.create', entityType: 'event', entityId: id, details: { guildId: g.id, title: req.body.title } })
-    webhookEmitter.emit('event', {
-      guildId: g.id,
-      eventType: 'event_created',
-      data: {
-        title: req.body.title,
-        description: req.body.description,
-        startTime: req.body.startTime,
-        endTime: req.body.endTime,
-        recurrenceRule: req.body.recurrenceRule || 'none',
-      }
-    })
-    res.status(201).json({ id, message: 'Event created.' })
-  } catch (err) { next(err) }
-})
-
-app.patch('/api/guilds/:guildId/events/:eventId', requireAuth, (req, res, next) => {
-  try {
-    const g = ensureGuildEditor(req.user.id, req.params.guildId)
-    statements.updateEvent.run({
-      id: req.params.eventId,
-      guildId: g.id,
-      title: sanitizeText(req.body.title, 100),
-      description: sanitizeText(req.body.description, 1000),
-      startTime: req.body.startTime,
-      endTime: req.body.endTime,
-      recurrenceRule: req.body.recurrenceRule || 'none'
-    })
-    writeAuditLog({ actorUserId: req.user.id, action: 'event.update', entityType: 'event', entityId: req.params.eventId, details: { guildId: g.id, title: req.body.title } })
-    res.json({ message: 'Event updated.' })
-  } catch (err) { next(err) }
-})
-
-app.delete('/api/guilds/:guildId/events/:eventId', requireAuth, (req, res, next) => {
-  try {
-    const g = ensureGuildEditor(req.user.id, req.params.guildId)
-    statements.deleteEvent.run(req.params.eventId, g.id)
-    writeAuditLog({ actorUserId: req.user.id, action: 'event.delete', entityType: 'event', entityId: req.params.eventId, details: { guildId: g.id } })
-    res.json({ message: 'Event deleted.' })
-  } catch (err) { next(err) }
-})
-
-app.get('/api/guilds/:guildId/events/:eventId/signups', requireAuth, (req, res, next) => {
-  try {
-    ensureGuildForUser(req.user.id, req.params.guildId)
-    const signups = statements.listSignupsForEvent.all(req.params.eventId, req.query.occurrenceDate)
-    res.json({ signups })
-  } catch (err) { next(err) }
-})
-
-app.post('/api/guilds/:guildId/events/:eventId/signups', requireAuth, (req, res, next) => {
-  try {
-    ensureGuildForUser(req.user.id, req.params.guildId)
-    const id = crypto.randomUUID()
-    statements.createSignup.run({
-      id,
-      eventId: req.params.eventId,
-      userId: req.user.id,
-      occurrenceDate: req.body.occurrenceDate,
-      role: req.body.role
-    })
-    res.status(201).json({ id, message: 'Signed up.' })
-  } catch (err) { next(err) }
-})
-
-app.patch('/api/signups/:signupId', requireAuth, (req, res, next) => {
-  try {
-    statements.updateSignup.run({
-      id: req.params.signupId,
-      userId: req.user.id,
-      role: req.body.role
-    })
-    res.json({ message: 'Signup updated.' })
-  } catch (err) { next(err) }
-})
-
-app.delete('/api/signups/:signupId', requireAuth, (req, res, next) => {
-  try {
-    statements.deleteSignup.run(req.params.signupId, req.user.id)
-    res.json({ message: 'Signup removed.' })
-  } catch (err) { next(err) }
 })
 
 app.get('/api/guilds/:guildId/webhooks', requireAuth, (req, res, next) => {
