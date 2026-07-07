@@ -60,9 +60,7 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
 
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
-          spacing={2}
-          justifyContent="center"
-          sx={{ mt: 4 }}
+          sx={{ mt: 4, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 8, justifyContent: 'center' }}
         >
           <Button
             variant="contained"
@@ -87,7 +85,7 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
       <Typography variant="h4" textAlign="center" gutterBottom sx={{ mb: 4 }}>
         Built for Guild Leaders, by Guild Leaders
       </Typography>
-      <Grid container spacing={3} sx={{ mb: 8 }}>
+      <Grid container spacing={3} sx={{ mb: 8, justifyContent: 'center', display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' } }}>
         {features.map((feature) => (
           <Grid item xs={12} sm={6} md={4} key={feature.title}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -118,6 +116,7 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
           spacing={3}
           justifyContent="center"
           alignItems="center"
+          sx={{ display: 'flex', justifyContent: 'center', flexDirection: { xs: 'column', sm: 'row' }, gap: 4 }}
         >
           <Box>
             <Typography variant="subtitle2" color="primary" sx={{ mb: 1, textTransform: 'uppercase' }}>
