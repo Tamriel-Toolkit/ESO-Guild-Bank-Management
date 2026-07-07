@@ -2396,7 +2396,7 @@ function App() {
                 </Button>
               </Stack>
             ) : (
-              <Stack direction="row" spacing={1} alignItems="center">
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ ...(currentPage === 'welcome') && { display: 'none' }, width: { xs: '100%', sm: 'auto' } }}>
                 <Button
                   color="inherit"
                   onClick={() => {
