@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -27,6 +30,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd'
 import BadgeIcon from '@mui/icons-material/Badge'
 import GroupsIcon from '@mui/icons-material/Groups'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 
 const defaultNewMemberDraft = {
   name: '',
@@ -185,9 +189,11 @@ function MemberManagementPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Filters</Typography>
+      <Accordion>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="h6">Filters</Typography>
+        </AccordionSummary>
+        <AccordionDetails>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={4}>
               <TextField
@@ -230,8 +236,8 @@ function MemberManagementPage({
               </FormControl>
             </Grid>
           </Grid>
-        </CardContent>
-      </Card>
+        </AccordionDetails>
+      </Accordion>
 
       <Card ref={tableRef}>
         <CardContent>

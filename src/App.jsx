@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   AppBar,
   Autocomplete,
@@ -667,6 +670,46 @@ const theme = createTheme({
         },
         '::selection': {
           backgroundColor: 'rgba(199, 161, 93, 0.28)',
+        },
+      },
+    },
+    MuiAccordion: {
+      styleOverrides: {
+        root: {
+          position: 'relative',
+          border: '1px solid rgba(199, 161, 93, 0.16)',
+          background:
+            'linear-gradient(180deg, rgba(36, 30, 24, 0.96), rgba(25, 21, 17, 0.94))',
+          boxShadow:
+            'inset 0 1px 0 rgba(255, 236, 196, 0.05), 0 16px 32px rgba(0, 0, 0, 0.22)',
+          backdropFilter: 'blur(10px)',
+          '&:before': {
+            display: 'none',
+          },
+        },
+      },
+    },
+    MuiAccordionSummary: {
+      styleOverrides: {
+        root: {
+          padding: '0 1.5rem',
+          '&.Mui-expanded': {
+            borderBottom: '1px solid rgba(199, 161, 93, 0.12)',
+            minHeight: 64,
+          },
+        },
+        content: {
+          margin: '12px 0',
+          '&.Mui-expanded': {
+            margin: '12px 0',
+          },
+        },
+      },
+    },
+    MuiAccordionDetails: {
+      styleOverrides: {
+        root: {
+          padding: '1.5rem',
         },
       },
     },
@@ -2729,53 +2772,54 @@ function App() {
               </CardContent>
             </Card>
 
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Stack spacing={2.5}>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
-                    <Box>
-                      <Typography variant="h6">Search, Filters, and Saved Views</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Narrow the ledger by member, amount, type, notes, and dates. Saved views keep recurring review setups one click away.
-                      </Typography>
-                    </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
-                      <FormControl size="small" sx={{ minWidth: 220 }}>
-                        <InputLabel id="saved-ledger-view-label">Saved view</InputLabel>
-                        <Select
-                          labelId="saved-ledger-view-label"
-                          label="Saved view"
-                          value={selectedSavedViewId}
-                          onChange={(event) => {
-                            const nextValue = event.target.value
-                            if (!nextValue) {
-                              setSelectedSavedViewId('')
-                              return
-                            }
+            <Accordion sx={{ mb: 3 }}>
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }} sx={{ width: '100%', pr: 2 }}>
+                  <Box>
+                    <Typography variant="h6">Search, Filters, and Saved Views</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Narrow the ledger by member, amount, type, notes, and dates. Saved views keep recurring review setups one click away.
+                    </Typography>
+                  </Box>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap" onClick={(e) => e.stopPropagation()}>
+                    <FormControl size="small" sx={{ minWidth: 220 }}>
+                      <InputLabel id="saved-ledger-view-label">Saved view</InputLabel>
+                      <Select
+                        labelId="saved-ledger-view-label"
+                        label="Saved view"
+                        value={selectedSavedViewId}
+                        onChange={(event) => {
+                          const nextValue = event.target.value
+                          if (!nextValue) {
+                            setSelectedSavedViewId('')
+                            return
+                          }
 
-                            handleApplySavedLedgerView(nextValue)
-                          }}
-                        >
-                          <MenuItem value="">Custom view</MenuItem>
-                          {scopedSavedLedgerViews.map((view) => (
-                            <MenuItem key={view.id} value={view.id}>
-                              {view.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button variant="outlined" onClick={handleSaveLedgerView}>
-                        Save current view
-                      </Button>
-                      <Button variant="outlined" color="error" onClick={handleDeleteSavedLedgerView} disabled={!selectedSavedViewId}>
-                        Delete view
-                      </Button>
-                      <Button variant="text" onClick={clearLedgerFilters} disabled={!hasActiveLedgerViewFilters && !selectedSavedViewId}>
-                        Clear filters
-                      </Button>
-                    </Stack>
+                          handleApplySavedLedgerView(nextValue)
+                        }}
+                      >
+                        <MenuItem value="">Custom view</MenuItem>
+                        {scopedSavedLedgerViews.map((view) => (
+                          <MenuItem key={view.id} value={view.id}>
+                            {view.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <Button variant="outlined" onClick={handleSaveLedgerView}>
+                      Save current view
+                    </Button>
+                    <Button variant="outlined" color="error" onClick={handleDeleteSavedLedgerView} disabled={!selectedSavedViewId}>
+                      Delete view
+                    </Button>
+                    <Button variant="text" onClick={clearLedgerFilters} disabled={!hasActiveLedgerViewFilters && !selectedSavedViewId}>
+                      Clear filters
+                    </Button>
                   </Stack>
-
+                </Stack>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Stack spacing={2.5}>
                   <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
                     <TextField
                       label="Search notes, members, and types"
@@ -2900,8 +2944,8 @@ function App() {
                     {hasActiveLedgerViewFilters && <Chip label="Filtered view active" color="warning" variant="outlined" />}
                   </Stack>
                 </Stack>
-              </CardContent>
-            </Card>
+              </AccordionDetails>
+            </Accordion>
 
             <Card ref={statisticsRef} sx={{ mb: 3 }}>
               <CardContent>
