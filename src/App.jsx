@@ -2564,7 +2564,7 @@ function App() {
                   Verify {currentUser.email} to enable password recovery.
                 </Alert>
               )}
-              {!sessionUser && !sessionLoading && (
+              {!sessionUser && !sessionLoading && !(currentPage === 'welcome') && (
                 <Alert severity="warning">
                   Guest mode is temporary. Create an account to save your data to the server.
                 </Alert>
