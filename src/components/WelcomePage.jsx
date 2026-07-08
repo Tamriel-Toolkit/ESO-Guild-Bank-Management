@@ -51,7 +51,7 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
   ]
 
   return (
-    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 } }}>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 8 }, textAlign: 'center' }}>
       {/* Hero Section */}
       <Box className="eso-hero-banner" sx={{ mb: 6, textAlign: 'center', py: { xs: 4, md: 6 } }}>
         <Typography variant="overline" className="eso-hero-kicker" sx={{ display: 'block', mb: 1 }}>
