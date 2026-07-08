@@ -1609,6 +1609,7 @@ function App() {
         user: '',
       }))
       setGlobalNotice('Logged out.')
+      setCurrentPage('welcome')
     } catch (error) {
       handleApiError(error)
     } finally {
@@ -2331,7 +2332,7 @@ function App() {
       <Box className="eso-bg" sx={{ minHeight: '100vh', pb: 6 }}>
         <AppBar position="static" color="transparent" sx={{ backdropFilter: 'blur(4px)' }}>
           <Toolbar sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexGrow: 1, minWidth: 0 }}>
+            <Box onClick={() => setCurrentPage('welcome')} sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexGrow: 1, minWidth: 0 }}>
               <Box
                 component="img"
                 src="/eso-coin-favicon.svg"
