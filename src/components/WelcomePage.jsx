@@ -14,6 +14,7 @@ import AssignmentIndIcon from '@mui/icons-material/AssignmentInd'
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import ExploreIcon from '@mui/icons-material/Explore'
 import PaymentsIcon from '@mui/icons-material/Payments'
+import DiscordIcon from './DiscordIcon'
 
 function WelcomePage({ onOpenAuth, onNavigate }) {
   const features = [
@@ -42,6 +43,11 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
       description: 'Find new members or a new home via the public portal for guild profiles and applications.',
       icon: <ExploreIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
     },
+    {
+      title: 'Discord Integration',
+      description: 'Sync your roster and event calendar with your Discord server using our Discord bot.',
+      icon: <DiscordIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
+    }
   ]
 
   return (
@@ -149,7 +155,7 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
               Explore First
             </Typography>
             <Button
-              variant="text"
+              variant="outlined"
               onClick={() => onNavigate('ledger')}
               sx={{ minWidth: 200 }}
             >
