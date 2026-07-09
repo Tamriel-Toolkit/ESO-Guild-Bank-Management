@@ -4,6 +4,7 @@ import Database from 'better-sqlite3'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import helmet from 'helmet'
+import nodemailer from 'nodemailer'
 import path from 'node:path'
 import process from 'node:process'
 import express from 'express'
@@ -28,6 +29,16 @@ const authRateLimitMax = Number(process.env.AUTH_RATE_LIMIT) || 10
 const isProduction = process.env.NODE_ENV === 'production'
 const guildRoles = new Set(['viewer', 'admin', 'owner'])
 const entryTypes = new Set(['deposit', 'withdrawal', 'salesTax'])
+const smtpHost = process.env.SMTP_HOST || ''
+const smtpPort = Number(process.env.SMTP_PORT) || 587
+const smtpSecure =
+  typeof process.env.SMTP_SECURE === 'string'
+    ? process.env.SMTP_SECURE === 'true'
+    : smtpPort === 465
+const smtpUser = process.env.SMTP_USER || ''
+const smtpPass = process.env.SMTP_PASS || ''
+const smtpFromEmail = process.env.SMTP_FROM_EMAIL || ''
+const smtpFromName = process.env.SMTP_FROM_NAME || 'ESO Guild Gold Ledger'
 const mailCaptureDirectory = process.env.MAIL_CAPTURE_DIRECTORY ? path.resolve(projectRoot, process.env.MAIL_CAPTURE_DIRECTORY) : ''
 
 fs.mkdirSync(path.dirname(dbPath), { recursive: true })
@@ -672,11 +683,53 @@ function scheduleBackup(reason) {
   }, delay)
 }
 
-async function deliverTransactionalEmail({ to, subject, text, category }) {
+function getMailFromAddress() {
+  return smtpFromEmail ? `${smtpFromName} <${smtpFromEmail}>` : ''
+}
+
+function canDeliverTransactionalEmail() {
+  return Boolean(mailCaptureDirectory || (smtpHost && smtpPort && smtpFromEmail))
+}
+
+function ensureTransactionalEmailAvailable() {
+  if (!canDeliverTransactionalEmail()) {
+    throw createHttpError(503, 'Account email is not configured right now. Please try again later.')
+  }
+}
+
+let mailTransport = null
+
+function getMailTransport() {
+  if (!mailTransport) {
+    mailTransport = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      auth: smtpUser || smtpPass ? { user: smtpUser, pass: smtpPass } : undefined,
+    })
+  }
+
+  return mailTransport
+}
+
+async function deliverTransactionalEmail({ to, subject, text, html, category }) {
   if (mailCaptureDirectory) {
     const filePath = path.join(mailCaptureDirectory, `${Date.now()}-${category}.json`)
-    await fs.promises.writeFile(filePath, JSON.stringify({ to, subject, text, category }, null, 2))
+    await fs.promises.writeFile(filePath, JSON.stringify({ to, subject, text, html, category }, null, 2))
+    return
   }
+
+  if (!canDeliverTransactionalEmail()) {
+    throw createHttpError(503, 'Account email is not configured right now. Please try again later.')
+  }
+
+  await getMailTransport().sendMail({
+    from: getMailFromAddress(),
+    to,
+    subject,
+    text,
+    html,
+  })
 }
 
 function writeAuditLog({ actorUserId = null, action, entityType, entityId = null, details = {} }) {
@@ -756,6 +809,10 @@ function requireAuth(req, _res, next) {
   const user = getAuthenticatedUser(req)
   if (!user) return next(createHttpError(401, 'Your session has expired or you are not signed in. Please log in and try again.'))
   req.user = user; next()
+}
+
+function getFirstAccessibleGuildId(userId) {
+  return statements.findFirstGuildForUser.get(userId)?.id ?? null
 }
 
 function ensureGuildForUser(userId, guildId) {
@@ -872,6 +929,7 @@ app.post('/api/auth/signup', async (req, res, next) => {
     const { passwordHash, passwordSalt } = hashPassword(p)
     const result = statements.createUser.run({ username: u, email: e, passwordHash, passwordSalt })
     writeAuditLog({ actorUserId: result.lastInsertRowid, action: 'auth.signup', entityType: 'user', entityId: result.lastInsertRowid, details: { username: u } })
+    ensureTransactionalEmailAvailable()
     await issueEmailVerification({ id: result.lastInsertRowid, email: e })
     createSession(res, result.lastInsertRowid)
     scheduleBackup('auth-signup')
@@ -919,6 +977,7 @@ app.post('/api/auth/password-reset/request', async (req, res, next) => {
       statements.deletePasswordResetTokensForUser.run(user.id)
       statements.createPasswordResetToken.run({ userId: user.id, tokenHash: hashSessionToken(token), expiresAt: new Date(Date.now() + passwordResetTokenTtlMs).toISOString() })
       const url = `${publicAppUrl}/?reset-password=${token}`
+      ensureTransactionalEmailAvailable()
       await deliverTransactionalEmail({ to: email, category: 'password-reset', subject: 'Reset Password', text: `Reset:
 ${url}` })
       writeAuditLog({ actorUserId: user.id, action: 'auth.password_reset_requested', entityType: 'user', entityId: user.id, details: { email } })
@@ -1116,7 +1175,13 @@ app.delete('/api/guilds/:guildId/membership', requireAuth, (req, res, next) => {
     const g = ensureGuildForUser(req.user.id, req.params.guildId)
     if (g.ownerUserId === req.user.id) throw createHttpError(400, 'Owners cannot leave.')
     writeAuditLog({ actorUserId: req.user.id, action: 'guild.leave', entityType: 'guild_member', entityId: `${g.id}:${req.user.id}`, details: { guildId: g.id } })
-    statements.deleteGuildMember.run(g.id, req.user.id)
+    const transaction = db.transaction(() => {
+      statements.deleteGuildMember.run(g.id, req.user.id)
+      if (req.user.selected_guild_id === g.id) {
+        statements.updateUserSelectedGuild.run(getFirstAccessibleGuildId(req.user.id), req.user.id)
+      }
+    })
+    transaction()
     scheduleBackup('guild-leave')
     res.json({ user: serializeUser(req.user.id) })
   } catch (err) { next(err) }
@@ -1140,11 +1205,17 @@ app.post('/api/invites/redeem', requireAuth, (req, res, next) => {
     const code = String(req.body.code || '').trim().toUpperCase()
     const invite = statements.findGuildInviteByCodeHash.get(hashSessionToken(code), new Date().toISOString())
     if (!invite) throw createHttpError(404, 'That invite code is not valid anymore. It may be incorrect, expired, or already used.')
-    statements.createGuildMember.run(invite.guildId, req.user.id, 'viewer')
-    const user = statements.findUserById.get(req.user.id)
-    const existing = statements.findTrackedMemberByName.get(invite.guildId, user.username)
-    if (existing && !existing.user_id) statements.linkTrackedMemberToUser.run(user.id, existing.id)
-    if (invite.singleUse) statements.deleteGuildInviteById.run(invite.id)
+
+    const transaction = db.transaction(() => {
+      statements.createGuildMember.run(invite.guildId, req.user.id, 'viewer')
+      statements.updateUserSelectedGuild.run(invite.guildId, req.user.id)
+      const user = statements.findUserById.get(req.user.id)
+      const existing = statements.findTrackedMemberByName.get(invite.guildId, user.username)
+      if (existing && !existing.user_id) statements.linkTrackedMemberToUser.run(user.id, existing.id)
+      if (invite.singleUse) statements.deleteGuildInviteById.run(invite.id)
+    })
+    transaction()
+
     writeAuditLog({ actorUserId: req.user.id, action: 'guild.invite_redeem', entityType: 'guild_member', entityId: `${invite.guildId}:${req.user.id}`, details: { guildId: invite.guildId } })
     scheduleBackup('guild-invite-redeem')
     res.json({ user: serializeUser(req.user.id) })
@@ -1538,6 +1609,35 @@ app.delete('/api/guilds/:guildId/webhooks/:webhookId', requireAuth, (req, res, n
     statements.deleteWebhook.run(req.params.webhookId, g.id)
     writeAuditLog({ actorUserId: req.user.id, action: 'webhook.delete', entityType: 'webhook', entityId: req.params.webhookId, details: { guildId: g.id } })
     res.status(204).end()
+  } catch (err) { next(err) }
+})
+
+app.post('/api/auth/email-verification/resend', requireAuth, async (req, res, next) => {
+  try {
+    ensureTransactionalEmailAvailable()
+    const user = statements.findUserById.get(req.user.id)
+    if (!user?.email) throw createHttpError(400, 'Add a recovery email before requesting a verification message.')
+    if (user.email_verified_at) return res.json({ message: 'Your recovery email is already verified.' })
+    await issueEmailVerification(user)
+    res.json({ message: 'A fresh verification email has been sent.' })
+  } catch (err) { next(err) }
+})
+
+app.patch('/api/account/email', requireAuth, async (req, res, next) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim()
+    validateEmail(email)
+    const existing = statements.findUserByEmail.get(email)
+    if (existing && existing.id !== req.user.id) throw createHttpError(409, 'That recovery email is already attached to another account.')
+    const transaction = db.transaction(() => {
+      statements.updateUserEmail.run(email, req.user.id)
+      writeAuditLog({ actorUserId: req.user.id, action: 'auth.email_update', entityType: 'user', entityId: req.user.id, details: { email } })
+    })
+    transaction()
+    const updatedUser = statements.findUserById.get(req.user.id)
+    await issueEmailVerification(updatedUser)
+    scheduleBackup('account-email-update')
+    res.json({ user: serializeUser(req.user.id), message: 'Recovery email updated. Check your inbox to verify it.' })
   } catch (err) { next(err) }
 })
 
