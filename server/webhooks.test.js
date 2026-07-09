@@ -16,6 +16,7 @@ const requestHeaders = {
 
 let tempDirectory
 let databaseFile
+let mailCaptureDirectory
 let serverProcess
 
 class SessionClient {
@@ -98,6 +99,7 @@ describe('Discord Webhook and Event Integration', () => {
   before(async () => {
     tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'eso-guild-webhook-tests-'))
     databaseFile = path.join(tempDirectory, 'guild-bank-test.db')
+    mailCaptureDirectory = path.join(tempDirectory, 'mail-capture')
 
     serverProcess = spawn('node', ['server/index.js'], {
       cwd: process.cwd(),
@@ -108,6 +110,7 @@ describe('Discord Webhook and Event Integration', () => {
         DATABASE_FILE: databaseFile,
         API_RATE_LIMIT: '1000',
         AUTH_RATE_LIMIT: '1000',
+        MAIL_CAPTURE_DIRECTORY: mailCaptureDirectory,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
