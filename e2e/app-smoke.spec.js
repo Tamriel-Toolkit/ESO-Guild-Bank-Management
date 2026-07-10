@@ -11,7 +11,13 @@ test('guest can complete onboarding and log a ledger entry', async ({ page }) =>
   // Navigate to ledger as guest
   await page.getByRole('button', { name: 'Try as Guest' }).click()
 
+  // Guest mode notification is now in a popover
+  const notifications_btn = page.getByRole('button', { name: 'Open notifications' })
+  await expect(notifications_btn).toBeVisible()
+  await notifications_btn.click()
   await expect(page.getByText('Guest mode is temporary. Create an account to save your data to the server.')).toBeVisible()
+  // Close popover to continue
+  await page.keyboard.press('Escape')
 
   await page.getByRole('button', { name: 'Open tutorial' }).click()
   await expect(page.getByText('Guided Tour')).toBeVisible()

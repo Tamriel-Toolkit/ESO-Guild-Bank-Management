@@ -14,12 +14,20 @@ test('full recruitment and application workflow', async ({ page, context }) => {
   await page.getByLabel('Recovery Email').fill(`${ownerUsername}@example.com`)
   await page.getByLabel('Password', { exact: true }).fill('password1234')
   await page.getByRole('button', { name: 'Create account' }).click()
+
+  // Account created notification is now in a popover
+  const notifications_btn = page.getByRole('button', { name: 'Open notifications' })
+  await expect(notifications_btn).toBeVisible()
+  await notifications_btn.click()
   await expect(page.getByText('Account created')).toBeVisible()
+  await page.keyboard.press('Escape')
 
   // 2. Create Guild
   await page.getByLabel('New guild').fill(guildName)
   await page.getByRole('button', { name: 'Add' }).click()
+  await notifications_btn.click()
   await expect(page.getByText('Guild created securely')).toBeVisible()
+  await page.keyboard.press('Escape')
 
   // 3. Configure Recruitment
   await page.getByRole('tab', { name: 'Recruitment' }).click()
@@ -45,7 +53,11 @@ test('full recruitment and application workflow', async ({ page, context }) => {
   await page.getByLabel('Recovery Email').fill(`${applicantUsername}@example.com`)
   await page.getByLabel('Password', { exact: true }).fill('password1234')
   await page.getByRole('button', { name: 'Create account' }).click()
+
+  // Account created notification is now in a popover
+  await notifications_btn.click()
   await expect(page.getByText('Account created')).toBeVisible()
+  await page.keyboard.press('Escape')
 
   // 5. Discover and Apply
   await page.getByRole('tab', { name: 'Ledger' }).click() // Transition to discovery from a logged in state normally requires clicking a tab or link

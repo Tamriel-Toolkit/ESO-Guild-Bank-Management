@@ -3,6 +3,7 @@ import {
   Alert,
   AppBar,
   Autocomplete,
+  Badge,
   Box,
   Button,
   Card,
@@ -44,6 +45,7 @@ import EditIcon from '@mui/icons-material/Edit'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutlineOutlined'
+import NotificationsIcon from '@mui/icons-material/NotificationsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import SettingsIcon from '@mui/icons-material/Settings'
 import {
@@ -128,6 +130,7 @@ import CharacterManagementDialog from "./components/CharacterManagementDialog"
 import Graph from './components/Graph'
 import WelcomePage from './components/WelcomePage'
 import TutorialOverlay from './components/TutorialOverlay'
+import NotificationsPopover from './components/NotificationsPopover'
 import { exportReportBundle, getOverallCurrentGold } from './reportExports'
 import { formatDisplayDate } from './utils/dateFormatting'
 import { applyLedgerFilters, defaultLedgerFilters, getLedgerSavedViewScope, hasActiveLedgerFilters } from './utils/ledgerFilters'
@@ -956,6 +959,7 @@ function App() {
   const [exportScope, setExportScope] = useState('ledger')
   const [exportPeriod, setExportPeriod] = useState('overall')
   const [exportRange, setExportRange] = useState(createTodayStatisticsRange)
+  const [notificationsAnchorEl, setNotificationsAnchorEl] = useState(null)
   const sessionUser = serverUser?.username ?? null
   const currentUser = serverUser
   const selectedGuild =
@@ -1012,6 +1016,124 @@ function App() {
   const hasLegacyData = Boolean(
     legacyState && (legacyState.guest.entries.length > 0 || legacyUserGuilds.length > 0),
   )
+
+  const notifications = useMemo(() => {
+    const list = []
+
+    if (sessionLoading) {
+      list.push({
+        id: 'session-loading',
+        severity: 'info',
+        message: 'Restoring your secure session...',
+      })
+    }
+
+    if (globalError) {
+      list.push({
+        id: 'global-error',
+        severity: 'error',
+        message: globalError,
+        onClose: () => setGlobalError(''),
+      })
+    }
+
+    if (globalNotice) {
+      list.push({
+        id: 'global-notice',
+        severity: 'success',
+        message: globalNotice,
+        onClose: () => setGlobalNotice(''),
+      })
+    }
+
+    if (hasLegacyData && sessionUser) {
+      list.push({
+        id: 'legacy-data-user',
+        severity: 'info',
+        message: 'Legacy browser data was found for this account. Import it to the server.',
+        action: (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              handleLegacyImport()
+              handleNotificationsClose()
+            }}
+          >
+            Import now
+          </Button>
+        ),
+      })
+    }
+
+    if (legacyState && !sessionUser && !sessionLoading) {
+      list.push({
+        id: 'legacy-data-guest',
+        severity: 'info',
+        message: 'Legacy browser data was found. Sign in to import it to the server.',
+      })
+    }
+
+    if (sessionUser && !sessionLoading && !currentUser?.email) {
+      list.push({
+        id: 'missing-email',
+        severity: 'warning',
+        message: 'Add a verified recovery email in settings to enable password resets.',
+        action: (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              setSettingsOpen(true)
+              handleNotificationsClose()
+            }}
+          >
+            Add email
+          </Button>
+        ),
+      })
+    }
+
+    if (sessionUser && !sessionLoading && currentUser?.email && !currentUser.emailVerified) {
+      list.push({
+        id: 'unverified-email',
+        severity: 'info',
+        message: `Verify ${currentUser.email} to enable password recovery.`,
+        action: (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              handleResendVerificationEmail()
+              handleNotificationsClose()
+            }}
+          >
+            Resend verification
+          </Button>
+        ),
+      })
+    }
+
+    if (!sessionUser && !sessionLoading && currentPage !== 'welcome') {
+      list.push({
+        id: 'guest-mode',
+        severity: 'warning',
+        message: 'Guest mode is temporary. Create an account to save your data to the server.',
+      })
+    }
+
+    return list
+  }, [
+    sessionLoading,
+    globalError,
+    globalNotice,
+    hasLegacyData,
+    sessionUser,
+    legacyState,
+    currentUser?.email,
+    currentUser?.emailVerified,
+    currentPage,
+  ])
 
   const tutorialSteps = useMemo(() => {
     const accountStep = sessionUser
@@ -1131,6 +1253,14 @@ function App() {
 
   const handleFinishTutorial = () => {
     setTutorialOpen(false)
+  }
+
+  const handleNotificationsClick = (event) => {
+    setNotificationsAnchorEl(event.currentTarget)
+  }
+
+  const handleNotificationsClose = () => {
+    setNotificationsAnchorEl(null)
   }
 
   const openExportDialog = () => {
@@ -2362,6 +2492,11 @@ function App() {
                 >
                   Browse Guilds
                 </Button>
+                <IconButton color="inherit" onClick={handleNotificationsClick} aria-label="Open notifications">
+                  <Badge badgeContent={notifications.length} color="error">
+                    <NotificationsIcon />
+                  </Badge>
+                </IconButton>
                 <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
                   <HelpOutlineIcon />
                 </IconButton>
@@ -2407,6 +2542,11 @@ function App() {
                 >
                   Browse Guilds
                 </Button>
+                <IconButton color="inherit" onClick={handleNotificationsClick} aria-label="Open notifications">
+                  <Badge badgeContent={notifications.length} color="error">
+                    <NotificationsIcon />
+                  </Badge>
+                </IconButton>
                 <IconButton color="inherit" onClick={() => setTutorialOpen(true)} aria-label="Open tutorial">
                   <HelpOutlineIcon />
                 </IconButton>
@@ -2511,65 +2651,6 @@ function App() {
               </>
             )}
 
-            <Stack spacing={2} sx={{ mb: 3 }}>
-              {sessionLoading && <Alert severity="info">Restoring your secure session...</Alert>}
-              {globalError && (
-                <Alert severity="error" onClose={() => setGlobalError('')}>
-                  {globalError}
-                </Alert>
-              )}
-              {globalNotice && (
-                <Alert severity="success" onClose={() => setGlobalNotice('')}>
-                  {globalNotice}
-                </Alert>
-              )}
-              {hasLegacyData && sessionUser && (
-                <Alert
-                  severity="info"
-                  action={
-                    <Button color="inherit" size="small" onClick={handleLegacyImport}>
-                      Import now
-                    </Button>
-                  }
-                >
-                  Legacy browser data was found for this account. Import it to the server.
-                </Alert>
-              )}
-              {legacyState && !sessionUser && !sessionLoading && (
-                <Alert severity="info">
-                  Legacy browser data was found. Sign in to import it to the server.
-                </Alert>
-              )}
-              {sessionUser && !sessionLoading && !currentUser?.email && (
-                <Alert
-                  severity="warning"
-                  action={
-                    <Button color="inherit" size="small" onClick={() => setSettingsOpen(true)}>
-                      Add email
-                    </Button>
-                  }
-                >
-                  Add a verified recovery email in settings to enable password resets.
-                </Alert>
-              )}
-              {sessionUser && !sessionLoading && currentUser?.email && !currentUser.emailVerified && (
-                <Alert
-                  severity="info"
-                  action={
-                    <Button color="inherit" size="small" onClick={handleResendVerificationEmail}>
-                      Resend verification
-                    </Button>
-                  }
-                >
-                  Verify {currentUser.email} to enable password recovery.
-                </Alert>
-              )}
-              {!sessionUser && !sessionLoading && !(currentPage === 'welcome') && (
-                <Alert severity="warning">
-                  Guest mode is temporary. Create an account to save your data to the server.
-                </Alert>
-              )}
-            </Stack>
 
             {currentPage === 'ledger' && (
               <>
@@ -3864,6 +3945,12 @@ function App() {
       </Dialog>
 
       <TutorialOverlay open={tutorialOpen} steps={tutorialSteps} onFinish={handleFinishTutorial} />
+
+      <NotificationsPopover
+        anchorEl={notificationsAnchorEl}
+        onClose={handleNotificationsClose}
+        notifications={notifications}
+      />
     </ThemeProvider>
   )
 }
