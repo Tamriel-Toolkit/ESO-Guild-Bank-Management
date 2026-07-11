@@ -11,6 +11,7 @@ import express from 'express'
 import { rateLimit } from 'express-rate-limit'
 import { fileURLToPath } from 'node:url'
 import { EventEmitter } from 'node:events'
+import { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -40,6 +41,8 @@ const smtpPass = process.env.SMTP_PASS || ''
 const smtpFromEmail = process.env.SMTP_FROM_EMAIL || ''
 const smtpFromName = process.env.SMTP_FROM_NAME || 'ESO Guild Gold Ledger'
 const mailCaptureDirectory = process.env.MAIL_CAPTURE_DIRECTORY ? path.resolve(projectRoot, process.env.MAIL_CAPTURE_DIRECTORY) : ''
+const discordToken = process.env.DISCORD_BOT_TOKEN
+const discordClientId = process.env.DISCORD_CLIENT_ID
 
 fs.mkdirSync(path.dirname(dbPath), { recursive: true })
 fs.mkdirSync(backupsDirectory, { recursive: true })
@@ -214,6 +217,15 @@ db.exec(`
     FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS guild_discord_settings (
+    guild_id TEXT PRIMARY KEY,
+    channel_id TEXT,
+    bot_enabled INTEGER NOT NULL DEFAULT 0,
+    event_types TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (guild_id) REFERENCES guilds (id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
     guild_id TEXT NOT NULL,
@@ -264,6 +276,7 @@ const tableInfos = {
   email_verification_tokens: db.pragma('table_info(email_verification_tokens)'),
   password_reset_tokens: db.pragma('table_info(password_reset_tokens)'),
   guild_webhooks: db.pragma('table_info(guild_webhooks)'),
+  guild_discord_settings: db.pragma('table_info(guild_discord_settings)'),
 }
 
 const ensureColumn = (table, column, definition) => {
@@ -330,6 +343,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_event_signups_event_id ON event_signups (event_id);
   CREATE INDEX IF NOT EXISTS idx_event_signups_user_id ON event_signups (user_id);
   CREATE INDEX IF NOT EXISTS idx_guild_webhooks_guild_id ON guild_webhooks (guild_id);
+  CREATE INDEX IF NOT EXISTS idx_guild_discord_settings_guild_id ON guild_discord_settings (guild_id);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users (email) WHERE email IS NOT NULL;
 `)
 
@@ -338,6 +352,94 @@ db.prepare(
    SELECT id FROM guilds`,
 ).run()
 
+
+const discordClient = discordToken ? new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+}) : null
+
+if (discordClient) {
+  discordClient.login(discordToken).catch(err => console.error('Discord bot login failed:', err))
+  discordClient.once('ready', async () => {
+    console.log(`Discord bot logged in as ${discordClient.user.tag}`)
+
+    // Register slash commands (simplified for this exercise - usually you'd use REST)
+    const commands = [
+      {
+        name: 'summary',
+        description: 'Get the latest guild bank summary',
+      },
+      {
+        name: 'events',
+        description: 'List upcoming guild events',
+      }
+    ]
+
+    try {
+      await discordClient.application.commands.set(commands)
+      console.log('Discord slash commands registered.')
+    } catch (err) {
+      console.error('Failed to register Discord commands:', err)
+    }
+  })
+
+  discordClient.on('interactionCreate', async interaction => {
+    if (interaction.isChatInputCommand()) {
+      const { commandName, guildId: discordGuildId } = interaction
+
+      // We need to find which of our guilds this Discord guild belongs to
+      // For simplicity, we assume one-to-one mapping if channel is set.
+      // In a real app, you'd store discord_guild_id in guild_discord_settings.
+
+      const settings = db.prepare('SELECT * FROM guild_discord_settings WHERE bot_enabled = 1').all()
+      // This is a naive lookup. Ideally we'd have a better way to map Discord guilds.
+      const guildSettings = settings.find(s => {
+        try {
+          const channel = discordClient.channels.cache.get(s.channel_id)
+          return channel && channel.guildId === discordGuildId
+        } catch { return false }
+      })
+
+      if (!guildSettings) {
+        return interaction.reply({ content: 'This guild is not linked to the ESO Guild Bank Ledger. Configure it in the app first.', ephemeral: true })
+      }
+
+      if (commandName === 'summary') {
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+        const entries = statements.listEntriesForGuildByDate.all(guildSettings.guild_id, yesterday)
+        const totals = entries.reduce((acc, e) => {
+          acc[e.type] = (acc[e.type] || 0) + (Number(e.amount) || 0)
+          return acc
+        }, { deposit: 0, withdrawal: 0, salesTax: 0 })
+
+        const { embeds } = formatDiscordMessage('daily_summary', { date: yesterday, totals })
+        await interaction.reply({ content: `**Summary for ${yesterday}**`, embeds })
+      } else if (commandName === 'events') {
+        const now = new Date().toISOString()
+        const future = new Date(Date.now() + 7 * 86400000).toISOString()
+        const rawEvents = statements.listEventsForGuild.all(guildSettings.guild_id)
+        const events = rawEvents.flatMap(e => expandRecurringEvents(e, now, future))
+
+        if (events.length === 0) {
+          return interaction.reply('No upcoming events in the next 7 days.')
+        }
+
+        const embeds = events.slice(0, 5).map(e => {
+          const { embeds: eventEmbeds } = formatDiscordMessage('event_created', e)
+          return eventEmbeds[0]
+        })
+
+        await interaction.reply({ content: '**Upcoming Events (Next 7 Days):**', embeds })
+      }
+    } else if (interaction.isButton()) {
+      const [action, eventId] = interaction.customId.split(':')
+      if (action === 'signup') {
+        // In a real app, we'd need to link the Discord user to a tracked member.
+        // For this rework, we'll point them back to the app since we can't reliably map users yet.
+        await interaction.reply({ content: `To sign up for this event, please visit the guild portal: ${publicAppUrl}`, ephemeral: true })
+      }
+    }
+  })
+}
 
 const statements = {
   createUser: db.prepare(`INSERT INTO users (username, email, password_hash, password_salt) VALUES (@username, @email, @passwordHash, @passwordSalt)`),
@@ -492,6 +594,15 @@ const statements = {
   createWebhook: db.prepare('INSERT INTO guild_webhooks (id, guild_id, url, event_types, channel_name) VALUES (@id, @guildId, @url, @eventTypes, @channelName)'),
   updateWebhook: db.prepare('UPDATE guild_webhooks SET url = @url, event_types = @eventTypes, channel_name = @channelName WHERE id = @id AND guild_id = @guildId'),
   deleteWebhook: db.prepare('DELETE FROM guild_webhooks WHERE id = ? AND guild_id = ?'),
+  findDiscordSettings: db.prepare('SELECT * FROM guild_discord_settings WHERE guild_id = ?'),
+  updateDiscordSettings: db.prepare(`
+    INSERT INTO guild_discord_settings (guild_id, channel_id, bot_enabled, event_types)
+    VALUES (@guildId, @channelId, @botEnabled, @eventTypes)
+    ON CONFLICT(guild_id) DO UPDATE SET
+      channel_id = excluded.channel_id,
+      bot_enabled = excluded.bot_enabled,
+      event_types = excluded.event_types
+  `),
   listGuilds: db.prepare('SELECT id FROM guilds'),
 }
 
@@ -512,52 +623,88 @@ async function sendDiscordWebhook(webhookUrl, payload) {
   }
 }
 
+function formatDiscordMessage(eventType, data) {
+  let content = ''
+  let embeds = []
+  let components = []
+
+  if (eventType === 'audit_log') {
+    content = `**Audit Log:** ${data.action} by ${data.actorUsername || 'System'}`
+    embeds = [new EmbedBuilder()
+      .setTitle(`Action: ${data.action}`)
+      .setDescription(`Entity: ${data.entityType} (${data.entityId || 'N/A'})`)
+      .addFields(Object.entries(data.details || {}).map(([k, v]) => ({ name: k, value: String(v), inline: true })))
+      .setTimestamp(new Date(data.createdAt))]
+  } else if (eventType === 'application_submitted') {
+    content = `**New Application!** User **${data.applicantUsername}** applied to the guild.`
+  } else if (eventType === 'application_approved') {
+    content = `**Application Approved!** **${data.applicantUsername}** is now a member.`
+  } else if (eventType === 'event_created') {
+    content = `**New Event Scheduled:** ${data.title}`
+    embeds = [new EmbedBuilder()
+      .setTitle(data.title)
+      .setDescription(data.description || 'No description provided.')
+      .addFields([
+        { name: 'Start', value: data.startTime, inline: true },
+        { name: 'End', value: data.endTime, inline: true },
+        { name: 'Recurrence', value: data.recurrenceRule || 'none', inline: true },
+      ])]
+
+    // Add Sign Up button for the bot
+    const signUpButton = new ButtonBuilder()
+      .setCustomId(`signup:${data.eventId || 'unknown'}`)
+      .setLabel('Sign Up')
+      .setStyle(ButtonStyle.Primary)
+
+    const row = new ActionRowBuilder().addComponents(signUpButton)
+    components = [row]
+  } else if (eventType === 'daily_summary') {
+    content = `**Daily Guild Bank Summary** for ${data.date}`
+    embeds = [new EmbedBuilder()
+      .setTitle('Activity Totals')
+      .addFields([
+        { name: 'Deposits', value: `${data.totals.deposit.toLocaleString()}g`, inline: true },
+        { name: 'Withdrawals', value: `${data.totals.withdrawal.toLocaleString()}g`, inline: true },
+        { name: 'Sales Tax', value: `${data.totals.salesTax.toLocaleString()}g`, inline: true },
+        { name: 'Net', value: `${(data.totals.deposit + data.totals.salesTax - data.totals.withdrawal).toLocaleString()}g`, inline: true },
+      ])]
+  }
+
+  return { content, embeds, components }
+}
+
 webhookEmitter.on('event', async ({ guildId, eventType, data }) => {
+  const { content, embeds, components } = formatDiscordMessage(eventType, data)
+  if (!content) return
+
+  // 1. Handle Legacy Webhooks
   const webhooks = statements.listWebhooksForGuild.all(guildId)
   for (const webhook of webhooks) {
     const types = JSON.parse(webhook.event_types || '[]')
     if (types.includes(eventType)) {
-      let content = ''
-      let embeds = []
+      // Webhooks don't support components (buttons) easily in this simple implementation,
+      // so we just send content and embeds (converted to plain objects)
+      await sendDiscordWebhook(webhook.url, {
+        content,
+        embeds: embeds.map(e => e.toJSON ? e.toJSON() : e)
+      })
+    }
+  }
 
-      if (eventType === 'audit_log') {
-        content = `**Audit Log:** ${data.action} by ${data.actorUsername || 'System'}`
-        embeds = [{
-          title: `Action: ${data.action}`,
-          description: `Entity: ${data.entityType} (${data.entityId || 'N/A'})`,
-          fields: Object.entries(data.details || {}).map(([k, v]) => ({ name: k, value: String(v), inline: true })),
-          timestamp: data.createdAt,
-        }]
-      } else if (eventType === 'application_submitted') {
-        content = `**New Application!** User **${data.applicantUsername}** applied to the guild.`
-      } else if (eventType === 'application_approved') {
-        content = `**Application Approved!** **${data.applicantUsername}** is now a member.`
-      } else if (eventType === 'event_created') {
-        content = `**New Event Scheduled:** ${data.title}`
-        embeds = [{
-          title: data.title,
-          description: data.description,
-          fields: [
-            { name: 'Start', value: data.startTime, inline: true },
-            { name: 'End', value: data.endTime, inline: true },
-            { name: 'Recurrence', value: data.recurrenceRule, inline: true },
-          ],
-        }]
-      } else if (eventType === 'daily_summary') {
-        content = `**Daily Guild Bank Summary** for ${data.date}`
-        embeds = [{
-          title: 'Activity Totals',
-          fields: [
-            { name: 'Deposits', value: `${data.totals.deposit.toLocaleString()}g`, inline: true },
-            { name: 'Withdrawals', value: `${data.totals.withdrawal.toLocaleString()}g`, inline: true },
-            { name: 'Sales Tax', value: `${data.totals.salesTax.toLocaleString()}g`, inline: true },
-            { name: 'Net', value: `${(data.totals.deposit + data.totals.salesTax - data.totals.withdrawal).toLocaleString()}g`, inline: true },
-          ],
-        }]
-      }
-
-      if (content) {
-        await sendDiscordWebhook(webhook.url, { content, embeds })
+  // 2. Handle New Discord Bot
+  if (discordClient && discordClient.isReady()) {
+    const discordSettings = statements.findDiscordSettings.get(guildId)
+    if (discordSettings && discordSettings.bot_enabled && discordSettings.channel_id) {
+      const eventTypes = JSON.parse(discordSettings.event_types || '[]')
+      if (eventTypes.includes(eventType)) {
+        try {
+          const channel = await discordClient.channels.fetch(discordSettings.channel_id)
+          if (channel) {
+            await channel.send({ content, embeds, components })
+          }
+        } catch (err) {
+          console.error('Error sending message via Discord bot:', err)
+        }
       }
     }
   }
@@ -1609,6 +1756,40 @@ app.delete('/api/guilds/:guildId/webhooks/:webhookId', requireAuth, (req, res, n
     statements.deleteWebhook.run(req.params.webhookId, g.id)
     writeAuditLog({ actorUserId: req.user.id, action: 'webhook.delete', entityType: 'webhook', entityId: req.params.webhookId, details: { guildId: g.id } })
     res.status(204).end()
+  } catch (err) { next(err) }
+})
+
+app.get('/api/guilds/:guildId/discord', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureGuildEditor(req.user.id, req.params.guildId)
+    const settings = statements.findDiscordSettings.get(g.id)
+    res.json({
+      settings: settings ? {
+        ...settings,
+        botEnabled: Boolean(settings.bot_enabled),
+        eventTypes: JSON.parse(settings.event_types || '[]')
+      } : {
+        guildId: g.id,
+        channelId: '',
+        botEnabled: false,
+        eventTypes: ['audit_log', 'application_submitted', 'application_approved', 'event_created', 'daily_summary']
+      },
+      inviteUrl: discordClientId ? `https://discord.com/api/oauth2/authorize?client_id=${discordClientId}&permissions=2147483648&scope=bot%20applications.commands` : null
+    })
+  } catch (err) { next(err) }
+})
+
+app.patch('/api/guilds/:guildId/discord', requireAuth, (req, res, next) => {
+  try {
+    const g = ensureGuildEditor(req.user.id, req.params.guildId)
+    statements.updateDiscordSettings.run({
+      guildId: g.id,
+      channelId: req.body.channelId || '',
+      botEnabled: req.body.botEnabled ? 1 : 0,
+      eventTypes: JSON.stringify(req.body.eventTypes || [])
+    })
+    writeAuditLog({ actorUserId: req.user.id, action: 'discord.update_settings', entityType: 'guild', entityId: g.id, details: { guildId: g.id } })
+    res.json({ message: 'Discord settings updated.' })
   } catch (err) { next(err) }
 })
 

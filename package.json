@@ -29,6 +29,7 @@
     "@mui/x-charts": "^9.3.0",
     "better-sqlite3": "^12.11.1",
     "cookie-parser": "^1.4.7",
+    "discord.js": "^14.26.5",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
