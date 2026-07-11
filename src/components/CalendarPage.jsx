@@ -109,18 +109,20 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
             />
           </Box>
           {canEdit && (
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              sx={{ mt: 2 }}
-              onClick={() => {
-                setInitialDate(new Date().toISOString().slice(0, 10))
-                setEditingEvent(null)
-                setDialogOpen(true)
-              }}
-            >
-              Create Event
-            </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                sx={{ marginTop: 3, marginRight: 1 }}
+                onClick={() => {
+                  setInitialDate(new Date().toISOString().slice(0, 10))
+                  setEditingEvent(null)
+                  setDialogOpen(true)
+                }}
+              >
+                Create Event
+              </Button>
+            </Box>
           )}
         </CardContent>
       </Card>
