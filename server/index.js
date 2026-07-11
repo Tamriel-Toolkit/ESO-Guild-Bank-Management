@@ -364,6 +364,7 @@ const statements = {
   listGuildsForUser: db.prepare(`SELECT g.id, g.name, g.week_start_date AS weekStartDate, g.due_scheme AS dueScheme, g.default_dues_amount AS defaultDuesAmount, g.created_at AS createdAt, g.user_id AS ownerUserId, o.username AS ownerUsername, m.role AS membershipRole FROM guilds g JOIN guild_members m ON m.guild_id = g.id JOIN users o ON o.id = g.user_id WHERE m.user_id = ? ORDER BY g.created_at ASC, g.id ASC`),
   findFirstGuildForUser: db.prepare(`SELECT g.id FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = ? ORDER BY g.created_at ASC, g.id ASC LIMIT 1`),
   listEntriesForGuild: db.prepare(`SELECT id, type, amount, is_donation AS isDonation, is_due AS isDue, withdrawal_category AS withdrawalCategory, date, user_name AS user, notes, created_at AS createdAt FROM entries WHERE guild_id = ? ORDER BY date DESC, created_at DESC, id DESC`),
+  listEntriesForGuildByDate: db.prepare(`SELECT id, type, amount, is_donation AS isDonation, is_due AS isDue, withdrawal_category AS withdrawalCategory, date, user_name AS user, notes, created_at AS createdAt FROM entries WHERE guild_id = ? AND date = ? ORDER BY date DESC, created_at DESC, id DESC`),
   listGuildMembersForGuild: db.prepare(`SELECT u.id AS userId, u.username, m.role, CASE WHEN u.id = g.user_id THEN 1 ELSE 0 END AS isOwner FROM guild_members m JOIN users u ON u.id = m.user_id JOIN guilds g ON g.id = m.guild_id WHERE m.guild_id = ? ORDER BY isOwner DESC, u.username ASC`),
   listTrackedMembersForGuild: db.prepare(`SELECT id, guild_id AS guildId, user_id AS userId, rank_id AS rankId, name, dues_amount AS duesAmount, due_period AS duePeriod, dues_day AS duesDay, uses_default_dues AS useDefaultDues, dues_exempt AS duesExempt, is_active AS isActive, last_active_at AS lastActiveAt, created_at AS createdAt FROM tracked_members WHERE guild_id = ? ORDER BY is_active DESC, LOWER(name) ASC, created_at ASC, id ASC`),
   findGuildForUser: db.prepare(`SELECT g.id, g.user_id AS ownerUserId, g.name, g.week_start_date AS weekStartDate, g.due_scheme AS dueScheme, g.default_dues_amount AS defaultDuesAmount, m.role AS membershipRole FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE g.id = ? AND m.user_id = ?`),
@@ -570,8 +571,7 @@ async function sendDailySummaries() {
   for (const guild of guilds) {
     if (guild.last_summary_at === today) continue
 
-    const entries = statements.listEntriesForGuild.all(guild.id)
-    const yesterdayEntries = entries.filter(e => e.date === yesterday)
+    const yesterdayEntries = statements.listEntriesForGuildByDate.all(guild.id, yesterday)
 
     if (yesterdayEntries.length > 0) {
       const totals = yesterdayEntries.reduce((acc, e) => {
