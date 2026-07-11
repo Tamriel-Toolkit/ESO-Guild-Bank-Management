@@ -83,19 +83,6 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
                 View and manage upcoming trials and events for {selectedGuild.name}.
               </Typography>
             </Box>
-            {canEdit && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setInitialDate(new Date().toISOString().slice(0, 10))
-                  setEditingEvent(null)
-                  setDialogOpen(true)
-                }}
-              >
-                Create Event
-              </Button>
-            )}
           </Stack>
 
           <Box sx={{
@@ -121,6 +108,20 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
               height="auto"
             />
           </Box>
+          {canEdit && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              sx={{ mt: 2 }}
+              onClick={() => {
+                setInitialDate(new Date().toISOString().slice(0, 10))
+                setEditingEvent(null)
+                setDialogOpen(true)
+              }}
+            >
+              Create Event
+            </Button>
+          )}
         </CardContent>
       </Card>
 
