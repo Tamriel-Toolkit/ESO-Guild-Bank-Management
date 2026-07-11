@@ -475,7 +475,7 @@ function DuesDashboardPage({
             <Typography variant="h6" gutterBottom>
               Recent Dues History
             </Typography>
-            <TableContainer>
+            <TableContainer sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -513,7 +513,7 @@ function DuesDashboardPage({
             <Typography variant="h6" gutterBottom>
               Recent Donation History
             </Typography>
-            <TableContainer>
+            <TableContainer sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>

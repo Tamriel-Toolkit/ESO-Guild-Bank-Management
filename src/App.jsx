@@ -2626,6 +2626,8 @@ function App() {
                         setCurrentPage(value)
                         setDiscoveryGuildId(null)
                       }}
+                      variant="scrollable"
+                      scrollButtons="auto"
                       sx={{ minHeight: 48 }}
                     >
                       <Tab value="ledger" label="Ledger" />
@@ -3310,6 +3312,8 @@ function App() {
                 <Tabs
                   value={recruitmentTab}
                   onChange={(_e, v) => setRecruitmentTab(v)}
+                  variant="scrollable"
+                  scrollButtons="auto"
                   sx={{ mb: 3 }}
                 >
                   <Tab value="settings" label="Profile & Settings" />
@@ -3358,36 +3362,38 @@ function App() {
                         <Divider />
 
                         {webhooksLoading ? <Typography>Loading webhooks...</Typography> : (
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Channel</TableCell>
-                                <TableCell>URL</TableCell>
-                                <TableCell>Events</TableCell>
-                                <TableCell align="right">Actions</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {webhooks.length === 0 ? (
-                                <TableRow><TableCell colSpan={4} align="center">No webhooks configured.</TableCell></TableRow>
-                              ) : webhooks.map(w => (
-                                <TableRow key={w.id}>
-                                  <TableCell>{w.channel_name}</TableCell>
-                                  <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {w.url}
-                                  </TableCell>
-                                  <TableCell>
-                                    {w.eventTypes.length} types
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    <IconButton size="small" color="error" onClick={() => handleDeleteWebhook(w.id)} disabled={mutationPending || !canEditSelectedGuild}>
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </TableCell>
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Channel</TableCell>
+                                  <TableCell>URL</TableCell>
+                                  <TableCell>Events</TableCell>
+                                  <TableCell align="right">Actions</TableCell>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
+                              </TableHead>
+                              <TableBody>
+                                {webhooks.length === 0 ? (
+                                  <TableRow><TableCell colSpan={4} align="center">No webhooks configured.</TableCell></TableRow>
+                                ) : webhooks.map(w => (
+                                  <TableRow key={w.id}>
+                                    <TableCell>{w.channel_name}</TableCell>
+                                    <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {w.url}
+                                    </TableCell>
+                                    <TableCell>
+                                      {w.eventTypes.length} types
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <IconButton size="small" color="error" onClick={() => handleDeleteWebhook(w.id)} disabled={mutationPending || !canEditSelectedGuild}>
+                                        <DeleteIcon fontSize="small" />
+                                      </IconButton>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
                         )}
                       </Stack>
                     </CardContent>
