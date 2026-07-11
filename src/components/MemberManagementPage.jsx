@@ -235,7 +235,7 @@ function MemberManagementPage({
 
       <Card ref={tableRef}>
         <CardContent>
-          <TableContainer>
+          <TableContainer sx={{ overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
