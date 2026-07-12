@@ -342,6 +342,13 @@ describe('auth and guild sharing flows', () => {
       'You have view-only access to this guild. Ask the owner to grant admin access before making changes.',
     )
 
+    const invalidPromote = await owner.request(`/api/guilds/${guildId}/members/${sharedMemberRecord.userId}`, {
+      method: 'PATCH',
+      body: { role: 'invalid_role' },
+    })
+    assert.equal(invalidPromote.response.status, 400)
+    assert.equal(invalidPromote.payload.error, 'Invalid role provided.')
+
     const promoteViewer = await owner.request(`/api/guilds/${guildId}/members/${sharedMemberRecord.userId}`, {
       method: 'PATCH',
       body: { role: 'admin' },
