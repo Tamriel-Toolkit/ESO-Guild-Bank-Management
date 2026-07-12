@@ -41,8 +41,8 @@ class SessionClient {
 
     const setCookie = response.headers.get('set-cookie')
     if (setCookie) {
-      const newCookies = setCookie.split(',').map(c => c.split(';', 1)[0])
-      this.cookieHeader = newCookies.join('; ')
+      const cookies = setCookie.split(',').map(c => c.split(';', 1)[0])
+      this.cookieHeader = cookies.join('; ')
     }
 
     if (response.status === 204) return { response, payload: null }
@@ -52,7 +52,7 @@ class SessionClient {
     try {
         payload = JSON.parse(text)
     } catch (e) {
-        // Silently fail if not JSON
+        if (text) console.error('PARSE ERROR', text)
     }
     return { response, payload }
   }
@@ -91,6 +91,8 @@ describe('Discord Bot Settings Integration', () => {
   before(async () => {
     tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'eso-guild-discord-tests-'))
     databaseFile = path.join(tempDirectory, 'guild-bank-test.db')
+    const mailCaptureDirectory = path.join(tempDirectory, 'mail-capture')
+    await fs.mkdir(mailCaptureDirectory)
 
     serverProcess = spawn('node', ['server/index.js'], {
       cwd: process.cwd(),
@@ -101,6 +103,8 @@ describe('Discord Bot Settings Integration', () => {
         DATABASE_FILE: databaseFile,
         API_RATE_LIMIT: '1000',
         AUTH_RATE_LIMIT: '1000',
+        MAIL_CAPTURE_DIRECTORY: mailCaptureDirectory,
+        DISCORD_BOT_TOKEN: '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -123,17 +127,22 @@ describe('Discord Bot Settings Integration', () => {
     const owner = new SessionClient()
 
     // Sign up
-    await owner.request('/api/auth/signup', {
+    const signup = await owner.request('/api/auth/signup', {
       method: 'POST',
       body: { username: 'discord_owner', email: 'discord@example.com', password: 'password1234' },
     })
+    assert.equal(signup.response.status, 201, signup.payload?.error)
 
     // Create guild
     const guildCreate = await owner.request('/api/guilds', {
       method: 'POST',
       body: { name: 'Discord Guild' },
     })
-    const guildId = guildCreate.payload.user.guilds[0].id
+    assert.equal(guildCreate.response.status, 201, guildCreate.payload?.error)
+
+    // We need to fetch the session to get the guild info
+    const session = await owner.request('/api/session')
+    const guildId = session.payload.user.guilds[0].id
 
     // Get default discord settings
     const getSettings = await owner.request(`/api/guilds/${guildId}/discord`)

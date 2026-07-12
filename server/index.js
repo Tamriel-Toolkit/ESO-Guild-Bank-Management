@@ -1765,7 +1765,8 @@ app.get('/api/guilds/:guildId/discord', requireAuth, (req, res, next) => {
     const settings = statements.findDiscordSettings.get(g.id)
     res.json({
       settings: settings ? {
-        ...settings,
+        guildId: settings.guild_id,
+        channelId: settings.channel_id,
         botEnabled: Boolean(settings.bot_enabled),
         eventTypes: JSON.parse(settings.event_types || '[]')
       } : {
