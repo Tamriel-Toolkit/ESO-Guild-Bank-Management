@@ -1254,6 +1254,7 @@ app.delete('/api/guilds/:guildId/entries/:id', requireAuth, (req, res, next) => 
 app.patch('/api/guilds/:guildId/members/:memberUserId', requireAuth, (req, res, next) => {
   try {
     const g = ensureGuildOwner(req.user.id, req.params.guildId)
+    if (!guildRoles.has(req.body.role)) throw createHttpError(400, 'Invalid role provided.')
     statements.updateGuildMemberRole.run(req.body.role, g.id, Number(req.params.memberUserId))
     writeAuditLog({ actorUserId: req.user.id, action: 'guild.member_role_update', entityType: 'guild_member', entityId: `${g.id}:${req.params.memberUserId}`, details: { guildId: g.id, role: req.body.role } })
     scheduleBackup('guild-member-role-update')
