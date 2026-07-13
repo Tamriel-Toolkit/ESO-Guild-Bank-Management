@@ -35,6 +35,7 @@ import {
   TextField,
   Toolbar,
   Divider,
+  Grid,
   Typography,
   ThemeProvider,
   createTheme,
@@ -2814,175 +2815,223 @@ function App() {
 
             <Card sx={{ mb: 3 }}>
               <CardContent>
-                <Stack spacing={2.5}>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
-                    <Box>
-                      <Typography variant="h6">Search, Filters, and Saved Views</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Narrow the ledger by member, amount, type, notes, and dates. Saved views keep recurring review setups one click away.
-                      </Typography>
-                    </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
-                      <FormControl size="small" sx={{ minWidth: 220 }}>
-                        <InputLabel id="saved-ledger-view-label">Saved view</InputLabel>
-                        <Select
-                          labelId="saved-ledger-view-label"
-                          label="Saved view"
-                          value={selectedSavedViewId}
-                          onChange={(event) => {
-                            const nextValue = event.target.value
-                            if (!nextValue) {
-                              setSelectedSavedViewId('')
-                              return
-                            }
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="h6">Ledger Filters</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Refine your view of the guild's gold flow.
+                  </Typography>
+                </Box>
 
-                            handleApplySavedLedgerView(nextValue)
+                <Grid container spacing={3}>
+                  <Grid item xs={12} lg={4}>
+                    <Typography variant="subtitle2" color="primary" sx={{ mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Search & Members
+                    </Typography>
+                    <Stack spacing={2}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="Search notes, members, and types"
+                        value={ledgerFilters.search}
+                        onChange={(event) => handleLedgerFilterChange('search', event.target.value)}
+                      />
+                      <Autocomplete
+                        freeSolo
+                        size="small"
+                        options={memberSuggestions}
+                        value={ledgerFilters.member}
+                        onInputChange={(_event, value) => handleLedgerFilterChange('member', value)}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Member filter" />
+                        )}
+                      />
+                    </Stack>
+                  </Grid>
+
+                  <Grid item xs={12} lg={4}>
+                    <Typography variant="subtitle2" color="primary" sx={{ mb: 1.5 }}>
+                      Date Range
+                    </Typography>
+                    <Stack spacing={2}>
+                      <Stack direction="row" spacing={1.5}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label="Start date"
+                          value={statisticsRange.startDate}
+                          onChange={(event) => handleStatisticsRangeChange('startDate', event.target.value)}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label="End date"
+                          value={statisticsRange.endDate}
+                          onChange={(event) => handleStatisticsRangeChange('endDate', event.target.value)}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                      </Stack>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          fullWidth
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            setSelectedSavedViewId('')
+                            setStatisticsRange(createAllStatisticsRange(activeEntries))
+                            setCollapsedStatisticsSections((prev) => ({ ...prev, Daily: true }))
                           }}
                         >
-                          <MenuItem value="">Custom view</MenuItem>
-                          {scopedSavedLedgerViews.map((view) => (
-                            <MenuItem key={view.id} value={view.id}>
-                              {view.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <Button variant="outlined" onClick={handleSaveLedgerView}>
-                        Save current view
-                      </Button>
-                      <Button variant="outlined" color="error" onClick={handleDeleteSavedLedgerView} disabled={!selectedSavedViewId}>
-                        Delete view
-                      </Button>
-                      <Button variant="text" onClick={clearLedgerFilters} disabled={!hasActiveLedgerViewFilters && !selectedSavedViewId}>
-                        Clear filters
-                      </Button>
+                          All dates
+                        </Button>
+                        <Button
+                          fullWidth
+                          size="small"
+                          variant="outlined"
+                          onClick={() => {
+                            setSelectedSavedViewId('')
+                            setStatisticsRange(createTodayStatisticsRange())
+                          }}
+                        >
+                          Today
+                        </Button>
+                      </Stack>
                     </Stack>
-                  </Stack>
+                  </Grid>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
-                    <TextField
-                      label="Search notes, members, and types"
-                      value={ledgerFilters.search}
-                      onChange={(event) => handleLedgerFilterChange('search', event.target.value)}
-                      sx={{ minWidth: { xs: '100%', md: 260 } }}
-                    />
-                    <Autocomplete
-                      freeSolo
-                      options={memberSuggestions}
-                      value={ledgerFilters.member}
-                      onInputChange={(_event, value) => handleLedgerFilterChange('member', value)}
-                      renderInput={(params) => (
-                        <TextField {...params} label="Member filter" sx={{ minWidth: { xs: '100%', md: 220 } }} />
-                      )}
-                    />
-                    <FormControl size="small" sx={{ minWidth: 170 }}>
-                      <InputLabel id="entry-type-filter-label">Entry type</InputLabel>
-                      <Select
-                        labelId="entry-type-filter-label"
-                        label="Entry type"
-                        value={ledgerFilters.entryType}
-                        onChange={(event) => handleLedgerFilterChange('entryType', event.target.value)}
-                      >
-                        <MenuItem value="all">All types</MenuItem>
-                        {entryTypes.map((entryType) => (
-                          <MenuItem key={entryType.value} value={entryType.value}>
-                            {entryType.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl size="small" sx={{ minWidth: 180 }}>
-                      <InputLabel id="deposit-kind-filter-label">Deposit subtype</InputLabel>
-                      <Select
-                        labelId="deposit-kind-filter-label"
-                        label="Deposit subtype"
-                        value={ledgerFilters.depositKind}
-                        disabled={!['all', 'deposit'].includes(ledgerFilters.entryType)}
-                        onChange={(event) => handleLedgerFilterChange('depositKind', event.target.value)}
-                      >
-                        <MenuItem value="all">All deposits</MenuItem>
-                        <MenuItem value="due">Dues only</MenuItem>
-                        <MenuItem value="donation">Donations only</MenuItem>
-                        <MenuItem value="standard">Standard deposits</MenuItem>
-                      </Select>
-                    </FormControl>
-                    <FormControl size="small" sx={{ minWidth: 190 }}>
-                      <InputLabel id="withdrawal-category-filter-label">Withdrawal category</InputLabel>
-                      <Select
-                        labelId="withdrawal-category-filter-label"
-                        label="Withdrawal category"
-                        value={ledgerFilters.withdrawalCategory}
-                        disabled={!['all', 'withdrawal'].includes(ledgerFilters.entryType)}
-                        onChange={(event) => handleLedgerFilterChange('withdrawalCategory', event.target.value)}
-                      >
-                        <MenuItem value="all">All withdrawals</MenuItem>
-                        {withdrawalCategoryOptions.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <TextField
-                      label="Min amount"
-                      type="number"
-                      value={ledgerFilters.minAmount}
-                      onChange={(event) => handleLedgerFilterChange('minAmount', event.target.value)}
-                      sx={{ minWidth: 140 }}
-                    />
-                    <TextField
-                      label="Max amount"
-                      type="number"
-                      value={ledgerFilters.maxAmount}
-                      onChange={(event) => handleLedgerFilterChange('maxAmount', event.target.value)}
-                      sx={{ minWidth: 140 }}
-                    />
-                  </Stack>
+                  <Grid item xs={12} lg={4}>
+                    <Typography variant="subtitle2" color="primary" sx={{ mb: 1.5 }}>
+                      Categories & Limits
+                    </Typography>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="entry-type-filter-label">Entry type</InputLabel>
+                          <Select
+                            labelId="entry-type-filter-label"
+                            label="Entry type"
+                            value={ledgerFilters.entryType}
+                            onChange={(event) => handleLedgerFilterChange('entryType', event.target.value)}
+                          >
+                            <MenuItem value="all">All types</MenuItem>
+                            {entryTypes.map((entryType) => (
+                              <MenuItem key={entryType.value} value={entryType.value}>
+                                {entryType.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="deposit-kind-filter-label">Deposit subtype</InputLabel>
+                          <Select
+                            labelId="deposit-kind-filter-label"
+                            label="Deposit subtype"
+                            value={ledgerFilters.depositKind}
+                            disabled={!['all', 'deposit'].includes(ledgerFilters.entryType)}
+                            onChange={(event) => handleLedgerFilterChange('depositKind', event.target.value)}
+                          >
+                            <MenuItem value="all">All deposits</MenuItem>
+                            <MenuItem value="due">Dues only</MenuItem>
+                            <MenuItem value="donation">Donations only</MenuItem>
+                            <MenuItem value="standard">Standard deposits</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel id="withdrawal-category-filter-label">Withdrawal category</InputLabel>
+                          <Select
+                            labelId="withdrawal-category-filter-label"
+                            label="Withdrawal category"
+                            value={ledgerFilters.withdrawalCategory}
+                            disabled={!['all', 'withdrawal'].includes(ledgerFilters.entryType)}
+                            onChange={(event) => handleLedgerFilterChange('withdrawalCategory', event.target.value)}
+                          >
+                            <MenuItem value="all">All withdrawals</MenuItem>
+                            {withdrawalCategoryOptions.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Min gold"
+                          type="number"
+                          value={ledgerFilters.minAmount}
+                          onChange={(event) => handleLedgerFilterChange('minAmount', event.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Max gold"
+                          type="number"
+                          value={ledgerFilters.maxAmount}
+                          onChange={(event) => handleLedgerFilterChange('maxAmount', event.target.value)}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Grid>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap" alignItems={{ xs: 'stretch', md: 'center' }}>
-                    <TextField
-                      type="date"
-                      label="Start date"
-                      value={statisticsRange.startDate}
-                      onChange={(event) => handleStatisticsRangeChange('startDate', event.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ minWidth: 170 }}
-                    />
-                    <TextField
-                      type="date"
-                      label="End date"
-                      value={statisticsRange.endDate}
-                      onChange={(event) => handleStatisticsRangeChange('endDate', event.target.value)}
-                      InputLabelProps={{ shrink: true }}
-                      sx={{ minWidth: 170 }}
-                    />
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        setSelectedSavedViewId('')
-                        setStatisticsRange(createAllStatisticsRange(activeEntries))
-                        setCollapsedStatisticsSections((prev) => ({ ...prev, Daily: true }))
-                      }}
-                    >
-                      All dates
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        setSelectedSavedViewId('')
-                        setStatisticsRange(createTodayStatisticsRange())
-                      }}
-                    >
-                      Today
-                    </Button>
-                  </Stack>
+                  <Grid item xs={12}>
+                    <Divider sx={{ my: 1 }} />
+                  </Grid>
 
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
-                    <Chip label={`Showing ${filteredEntries.length} of ${activeEntries.length} entries`} color="primary" variant={hasActiveLedgerViewFilters ? 'filled' : 'outlined'} />
-                    <Chip label={`Date range: ${formatDisplayDate(statisticsRange.startDate)} - ${formatDisplayDate(statisticsRange.endDate)}`} variant="outlined" />
-                    {hasActiveLedgerViewFilters && <Chip label="Filtered view active" color="warning" variant="outlined" />}
-                  </Stack>
-                </Stack>
+                  <Grid item xs={12}>
+                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems="center">
+                      <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                        <Chip label={`Showing ${filteredEntries.length} of ${activeEntries.length} entries`} color="primary" variant={hasActiveLedgerViewFilters ? 'filled' : 'outlined'} />
+                        <Chip label={`Range: ${formatDisplayDate(statisticsRange.startDate)} - ${formatDisplayDate(statisticsRange.endDate)}`} variant="outlined" />
+                        {hasActiveLedgerViewFilters && <Chip label="Filtered view active" color="warning" variant="outlined" />}
+                        <Button variant="text" size="small" onClick={clearLedgerFilters} disabled={!hasActiveLedgerViewFilters && !selectedSavedViewId}>
+                          Clear all filters
+                        </Button>
+                      </Stack>
+
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <FormControl size="small" sx={{ minWidth: 200 }}>
+                          <InputLabel id="saved-ledger-view-label">Saved view</InputLabel>
+                          <Select
+                            labelId="saved-ledger-view-label"
+                            label="Saved view"
+                            value={selectedSavedViewId}
+                            onChange={(event) => {
+                              const nextValue = event.target.value
+                              if (!nextValue) {
+                                setSelectedSavedViewId('')
+                                return
+                              }
+                              handleApplySavedLedgerView(nextValue)
+                            }}
+                          >
+                            <MenuItem value="">Custom view</MenuItem>
+                            {scopedSavedLedgerViews.map((view) => (
+                              <MenuItem key={view.id} value={view.id}>
+                                {view.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Button variant="outlined" size="small" onClick={handleSaveLedgerView}>
+                          Save view
+                        </Button>
+                        <IconButton color="error" size="small" onClick={handleDeleteSavedLedgerView} disabled={!selectedSavedViewId}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </Stack>
+                  </Grid>
+                </Grid>
               </CardContent>
             </Card>
 

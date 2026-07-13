@@ -188,46 +188,53 @@ function MemberManagementPage({
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>Filters</Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 1.5 }}>
+                Search
+              </Typography>
               <TextField
                 fullWidth
-                label="Search members"
+                size="small"
+                label="Search member names"
                 value={filters.search}
                 onChange={(e) => setFilters(p => ({ ...p, search: e.target.value }))}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
-              <FormControl fullWidth>
-                <InputLabel id="filter-role-label">Filter by Role</InputLabel>
-                <Select
-                  labelId="filter-role-label"
-                  label="Filter by Role"
-                  value={filters.role}
-                  onChange={(e) => setFilters(p => ({ ...p, role: e.target.value }))}
-                >
-                  <MenuItem value="all">All Roles</MenuItem>
-                  <MenuItem value="Tank">Tank</MenuItem>
-                  <MenuItem value="Healer">Healer</MenuItem>
-                  <MenuItem value="DPS">DPS</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={4}>
-              <FormControl fullWidth>
-                <InputLabel id="filter-class-label">Filter by Class</InputLabel>
-                <Select
-                  labelId="filter-class-label"
-                  label="Filter by Class"
-                  value={filters.className}
-                  onChange={(e) => setFilters(p => ({ ...p, className: e.target.value }))}
-                >
-                  <MenuItem value="all">All Classes</MenuItem>
-                  {['Dragonknight', 'Sorcerer', 'Nightblade', 'Templar', 'Warden', 'Necromancer', 'Arcanist'].map(c => (
-                    <MenuItem key={c} value={c}>{c}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+            <Grid item xs={12} sm={6}>
+              <Typography variant="subtitle2" color="primary" sx={{ mb: 1.5 }}>
+                Character Details
+              </Typography>
+              <Stack direction="row" spacing={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="filter-role-label">Role</InputLabel>
+                  <Select
+                    labelId="filter-role-label"
+                    label="Role"
+                    value={filters.role}
+                    onChange={(e) => setFilters(p => ({ ...p, role: e.target.value }))}
+                  >
+                    <MenuItem value="all">All Roles</MenuItem>
+                    <MenuItem value="Tank">Tank</MenuItem>
+                    <MenuItem value="Healer">Healer</MenuItem>
+                    <MenuItem value="DPS">DPS</MenuItem>
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="filter-class-label">Class</InputLabel>
+                  <Select
+                    labelId="filter-class-label"
+                    label="Class"
+                    value={filters.className}
+                    onChange={(e) => setFilters(p => ({ ...p, className: e.target.value }))}
+                  >
+                    <MenuItem value="all">All Classes</MenuItem>
+                    {['Dragonknight', 'Sorcerer', 'Nightblade', 'Templar', 'Warden', 'Necromancer', 'Arcanist'].map(c => (
+                      <MenuItem key={c} value={c}>{c}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
             </Grid>
           </Grid>
         </CardContent>
