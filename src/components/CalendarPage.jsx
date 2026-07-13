@@ -75,7 +75,7 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
   return (
     <Stack spacing={3}>
       <Card>
-        <CardContent>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column' }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Box>
               <Typography variant="h6">Guild Calendar</Typography>
@@ -83,19 +83,6 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
                 View and manage upcoming trials and events for {selectedGuild.name}.
               </Typography>
             </Box>
-            {canEdit && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setInitialDate(new Date().toISOString().slice(0, 10))
-                  setEditingEvent(null)
-                  setDialogOpen(true)
-                }}
-              >
-                Create Event
-              </Button>
-            )}
           </Stack>
 
           <Box sx={{
@@ -121,6 +108,20 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
               height="auto"
             />
           </Box>
+            {canEdit && (
+              <Button
+                sx={{ mt: 3, mr: 1, alignSelf: 'flex-end' }}
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setInitialDate(new Date().toISOString().slice(0, 10))
+                  setEditingEvent(null)
+                  setDialogOpen(true)
+                }}
+              >
+                Create Event
+              </Button>
+            )}
         </CardContent>
       </Card>
 
