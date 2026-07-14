@@ -85,7 +85,9 @@ function Graph({ entries, statisticsRange }) {
     if (activeSeries.length === 0) {
         return (
             <Stack spacing={2}>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                }}>
                     {seriesOptions.map((seriesOption) => (
                         <FormControlLabel
                             key={seriesOption.id}
@@ -110,12 +112,14 @@ function Graph({ entries, statisticsRange }) {
                     </Typography>
                 </Box>
             </Stack>
-        )
+        );
     }
 
     return (
         <Stack spacing={2}>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                flexWrap: "wrap"
+            }}>
                 {seriesOptions.map((seriesOption) => (
                     <FormControlLabel
                         key={seriesOption.id}
@@ -147,7 +151,7 @@ function Graph({ entries, statisticsRange }) {
                 slotProps={{ legend: { hidden: false } }}
             />
         </Stack>
-    )
+    );
 }
 
 export default Graph

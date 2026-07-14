@@ -54,7 +54,9 @@ function SettingsDialog({
               helperText="Required to change your recovery email."
               fullWidth
             />
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Stack direction="row" spacing={1} useFlexGap sx={{
+              flexWrap: "wrap"
+            }}>
               <Button variant="contained" onClick={handleUpdateRecoveryEmail} disabled={mutationPending}>
                 Save recovery email
               </Button>
@@ -100,7 +102,7 @@ function SettingsDialog({
         </Button>
       </DialogActions>
     </Dialog>
-  )
+  );
 }
 
 export default SettingsDialog

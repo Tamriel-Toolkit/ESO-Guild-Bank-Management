@@ -136,7 +136,14 @@ function MemberManagementPage({
             </Button>
           </Stack>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }} useFlexGap flexWrap="wrap">
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{
+              mb: 2,
+              flexWrap: "wrap"
+            }}
+            useFlexGap>
             <Chip label={`Members: ${summary.memberCount}`} variant="outlined" />
             <Chip label={`Active: ${summary.activeCount}`} variant="outlined" />
           </Stack>

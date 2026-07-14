@@ -232,7 +232,14 @@ function DuesDashboardPage({
               </Button>
             </Stack>
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }} useFlexGap flexWrap="wrap">
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{
+              mt: 2,
+              flexWrap: "wrap"
+            }}
+            useFlexGap>
             <Chip label={`Scheme: ${snapshot.duesScheme === 'weekly' ? 'Weekly' : 'Monthly'}`} variant="outlined" />
             <Chip label={`Current cycle: ${snapshot.currentCycle.label}`} color="primary" variant="outlined" />
             <Chip label={`Guild default: ${fmtGold(snapshot.defaultDuesAmount)}`} variant="outlined" />
@@ -392,9 +399,14 @@ function DuesDashboardPage({
                           </Stack>
                         </TableCell>
                         <TableCell>
-                          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{
-                            alignItems: "center"
-                          }}>
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{
+                              alignItems: "center",
+                              flexWrap: "wrap"
+                            }}>
                             <Chip
                               size="small"
                               label={statusChip.label}

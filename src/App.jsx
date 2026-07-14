@@ -2478,11 +2478,11 @@ function App() {
                 direction="row"
                 spacing={1}
                 useFlexGap
-                flexWrap="wrap"
                 sx={{
                   width: { xs: '100%', sm: 'auto' },
                   alignItems: "center",
-                  justifyContent: "flex-end"
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap"
                 }}>
                 <Button
                   color="inherit"
@@ -2723,7 +2723,9 @@ function App() {
                       onChange={(event) =>
                         setEntryDraft((prev) => ({ ...prev, date: event.target.value }))
                       }
-                      InputLabelProps={{ shrink: true }}
+                      slotProps={{
+                        inputLabel: { shrink: true }
+                      }}
                     />
                     <Autocomplete
                       freeSolo
@@ -2751,7 +2753,9 @@ function App() {
                       }
                     />
                     {entryDraft.type === 'deposit' && (
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                        flexWrap: "wrap"
+                      }}>
                         <FormControlLabel
                           control={
                             <Checkbox
@@ -2791,7 +2795,9 @@ function App() {
                         <Typography variant="body2" color="text.secondary">
                           Withdrawal Purpose
                         </Typography>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                          flexWrap: "wrap"
+                        }}>
                           {withdrawalCategoryOptions.map((option) => (
                             <FormControlLabel
                               key={option.value}
@@ -2837,7 +2843,9 @@ function App() {
                         Narrow the ledger by member, amount, type, notes, and dates. Saved views keep recurring review setups one click away.
                       </Typography>
                     </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap sx={{
+                      flexWrap: "wrap"
+                    }}>
                       <FormControl size="small" sx={{ minWidth: 220 }}>
                         <InputLabel id="saved-ledger-view-label">Saved view</InputLabel>
                         <Select
@@ -2874,7 +2882,9 @@ function App() {
                     </Stack>
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     <TextField
                       label="Search notes, members, and types"
                       value={ledgerFilters.search}
@@ -2954,24 +2964,33 @@ function App() {
                     />
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap" sx={{
-                    alignItems: { xs: 'stretch', md: 'center' }
-                  }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1.5}
+                    useFlexGap
+                    sx={{
+                      alignItems: { xs: 'stretch', md: 'center' },
+                      flexWrap: "wrap"
+                    }}>
                     <TextField
                       type="date"
                       label="Start date"
                       value={statisticsRange.startDate}
                       onChange={(event) => handleStatisticsRangeChange('startDate', event.target.value)}
-                      InputLabelProps={{ shrink: true }}
                       sx={{ minWidth: 170 }}
+                      slotProps={{
+                        inputLabel: { shrink: true }
+                      }}
                     />
                     <TextField
                       type="date"
                       label="End date"
                       value={statisticsRange.endDate}
                       onChange={(event) => handleStatisticsRangeChange('endDate', event.target.value)}
-                      InputLabelProps={{ shrink: true }}
                       sx={{ minWidth: 170 }}
+                      slotProps={{
+                        inputLabel: { shrink: true }
+                      }}
                     />
                     <Button
                       variant="outlined"
@@ -2994,7 +3013,9 @@ function App() {
                     </Button>
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     <Chip label={`Showing ${filteredEntries.length} of ${activeEntries.length} entries`} color="primary" variant={hasActiveLedgerViewFilters ? 'filled' : 'outlined'} />
                     <Chip label={`Date range: ${formatDisplayDate(statisticsRange.startDate)} - ${formatDisplayDate(statisticsRange.endDate)}`} variant="outlined" />
                     {hasActiveLedgerViewFilters && <Chip label="Filtered view active" color="warning" variant="outlined" />}
@@ -3019,7 +3040,9 @@ function App() {
                       Aggregates reflect the current filtered ledger view, so reports stay readable as the log grows.
                     </Typography>
                   </Box>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     <Chip label={`Periods shown: ${statisticsRows.filter((row) => !row.isSectionHeader).length}`} variant="outlined" />
                     <Chip label={`Entries in view: ${filteredEntries.length}`} variant="outlined" />
                     <Chip label={`Top donors shown per row: ${filteredEntries.length > 0 ? 'Up to 3' : '0'}`} variant="outlined" />
@@ -3087,7 +3110,9 @@ function App() {
                             <TableCell align="right">{statisticsRow.entryCount ?? 0}</TableCell>
                             <TableCell>
                               {statisticsRow.topDonors?.length ? (
-                                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                                <Stack direction="row" spacing={0.75} useFlexGap sx={{
+                                  flexWrap: "wrap"
+                                }}>
                                   {statisticsRow.topDonors.map((donor) => (
                                     <Chip
                                       key={`${statisticsRow.label}-${donor.rank}-${donor.username}`}
@@ -3110,7 +3135,7 @@ function App() {
                               {fmtGold(grandTotal)}
                             </TableCell>
                           </TableRow>
-                        )
+                        );
                       })}
                     </TableBody>
                   </Table>
@@ -3701,8 +3726,10 @@ function App() {
                         startDate: event.target.value,
                       }))
                     }
-                    InputLabelProps={{ shrink: true }}
                     fullWidth
+                    slotProps={{
+                      inputLabel: { shrink: true }
+                    }}
                   />
                   <TextField
                     label="End date"
@@ -3714,8 +3741,10 @@ function App() {
                         endDate: event.target.value,
                       }))
                     }
-                    InputLabelProps={{ shrink: true }}
                     fullWidth
+                    slotProps={{
+                      inputLabel: { shrink: true }
+                    }}
                   />
                 </Stack>
               </>
@@ -3764,7 +3793,9 @@ function App() {
               {pendingDueSchemeChange?.currentDueScheme || 'monthly'} to{' '}
               {pendingDueSchemeChange?.nextDueScheme || 'weekly'} dues?
             </Typography>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Stack direction="row" spacing={1} useFlexGap sx={{
+              flexWrap: "wrap"
+            }}>
               <Chip
                 label={`Current: ${pendingDueSchemeChange?.currentDueScheme || 'monthly'}`}
                 variant="outlined"
@@ -3837,7 +3868,9 @@ function App() {
                 onChange={(event) =>
                   setEditingEntry((prev) => ({ ...prev, date: event.target.value }))
                 }
-                InputLabelProps={{ shrink: true }}
+                slotProps={{
+                  inputLabel: { shrink: true }
+                }}
               />
               <Autocomplete
                 freeSolo
@@ -3860,7 +3893,9 @@ function App() {
                 minRows={2}
               />
               {editingEntry.type === 'deposit' && (
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                  flexWrap: "wrap"
+                }}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -3900,7 +3935,9 @@ function App() {
                   <Typography variant="body2" color="text.secondary">
                     Withdrawal Purpose
                   </Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     {withdrawalCategoryOptions.map((option) => (
                       <FormControlLabel
                         key={option.value}
