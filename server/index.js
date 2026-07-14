@@ -692,6 +692,7 @@ function canDeliverTransactionalEmail() {
 }
 
 function ensureTransactionalEmailAvailable() {
+  if (!isProduction) return;
   if (!canDeliverTransactionalEmail()) {
     throw createHttpError(503, 'Account email is not configured right now. Please try again later.')
   }
