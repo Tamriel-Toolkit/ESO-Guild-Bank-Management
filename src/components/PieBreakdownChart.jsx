@@ -117,7 +117,9 @@ function PieBreakdownChart({ entries, statisticsRange }) {
 
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="space-between">
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{
+        justifyContent: "space-between"
+      }}>
         <ButtonGroup variant="outlined" size="small">
           {chartModes.map((chartMode) => (
             <Button
@@ -157,7 +159,7 @@ function PieBreakdownChart({ entries, statisticsRange }) {
         />
       )}
     </Stack>
-  )
+  );
 }
 
 export default PieBreakdownChart

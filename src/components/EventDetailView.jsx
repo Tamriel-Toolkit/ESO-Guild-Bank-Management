@@ -152,7 +152,9 @@ function EventDetailView({ open, onClose, guildId, event, occurrenceDate, tracke
 
           <Divider />
 
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{
+            alignItems: "center"
+          }}>
             <Box sx={{ flexGrow: 1 }}>
               <Typography variant="h6">Role Composition ({signups.filter(s => s.status === 'confirmed').length} / {event?.maxParticipants || '∞'})</Typography>
               <Stack direction="row" spacing={2} sx={{ mt: 1 }}>
@@ -285,7 +287,7 @@ function EventDetailView({ open, onClose, guildId, event, occurrenceDate, tracke
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
-  )
+  );
 }
 
 export default EventDetailView

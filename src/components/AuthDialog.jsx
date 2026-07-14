@@ -52,7 +52,9 @@ function AuthDialog({
         </Stack>
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+        <Stack direction="row" spacing={1} useFlexGap sx={{
+          flexWrap: "wrap"
+        }}>
           <Button
             onClick={() => {
               setAuthMode((prev) => (prev === 'login' ? 'signup' : 'login'))
@@ -70,7 +72,7 @@ function AuthDialog({
         </Button>
       </DialogActions>
     </Dialog>
-  )
+  );
 }
 
 export default AuthDialog

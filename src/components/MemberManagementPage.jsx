@@ -112,7 +112,13 @@ function MemberManagementPage({
     <Stack spacing={3}>
       <Card ref={controlsRef}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            sx={{
+              mb: 2,
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
             <Box>
               <Typography variant="h6">Member Management</Typography>
               <Typography variant="body2" color="text.secondary">
@@ -130,7 +136,14 @@ function MemberManagementPage({
             </Button>
           </Stack>
 
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }} useFlexGap flexWrap="wrap">
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{
+              mb: 2,
+              flexWrap: "wrap"
+            }}
+            useFlexGap>
             <Chip label={`Members: ${summary.memberCount}`} variant="outlined" />
             <Chip label={`Active: ${summary.activeCount}`} variant="outlined" />
           </Stack>
@@ -184,12 +197,11 @@ function MemberManagementPage({
           </Stack>
         </CardContent>
       </Card>
-
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>Filters</Typography>
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={4}>
+            <Grid xs={12} sm={4}>
               <TextField
                 fullWidth
                 label="Search members"
@@ -197,7 +209,7 @@ function MemberManagementPage({
                 onChange={(e) => setFilters(p => ({ ...p, search: e.target.value }))}
               />
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid xs={12} sm={4}>
               <FormControl fullWidth>
                 <InputLabel id="filter-role-label">Filter by Role</InputLabel>
                 <Select
@@ -213,7 +225,7 @@ function MemberManagementPage({
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={4}>
+            <Grid xs={12} sm={4}>
               <FormControl fullWidth>
                 <InputLabel id="filter-class-label">Filter by Class</InputLabel>
                 <Select
@@ -232,7 +244,6 @@ function MemberManagementPage({
           </Grid>
         </CardContent>
       </Card>
-
       <Card ref={tableRef}>
         <CardContent>
           <TableContainer sx={{ overflowX: 'auto' }}>
@@ -312,7 +323,9 @@ function MemberManagementPage({
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
+                        <Stack direction="row" spacing={1} sx={{
+                          alignItems: "center"
+                        }}>
                           {primaryChar ? (
                             <Chip
                               size="small"
@@ -333,7 +346,9 @@ function MemberManagementPage({
                         </Typography>
                       </TableCell>
                       <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Stack direction="row" spacing={1} sx={{
+                          justifyContent: "flex-end"
+                        }}>
                           <Button
                             size="small"
                             onClick={() => onUpdateTrackedMember(member.id, { ...member, isActive: !member.isActive })}
@@ -355,7 +370,7 @@ function MemberManagementPage({
                         </Stack>
                       </TableCell>
                     </TableRow>
-                  )
+                  );
                 })}
               </TableBody>
             </Table>
@@ -363,7 +378,7 @@ function MemberManagementPage({
         </CardContent>
       </Card>
     </Stack>
-  )
+  );
 }
 
 export default MemberManagementPage

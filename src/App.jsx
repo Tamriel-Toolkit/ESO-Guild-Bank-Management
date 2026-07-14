@@ -2477,12 +2477,13 @@ function App() {
               <Stack
                 direction="row"
                 spacing={1}
-                alignItems="center"
                 useFlexGap
-                flexWrap="wrap"
-                justifyContent="flex-end"
-                sx={{ width: { xs: '100%', sm: 'auto' } }}
-              >
+                sx={{
+                  width: { xs: '100%', sm: 'auto' },
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  flexWrap: "wrap"
+                }}>
                 <Button
                   color="inherit"
                   onClick={() => {
@@ -2532,7 +2533,14 @@ function App() {
                 </Button>
               </Stack>
             ) : (
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ ...(currentPage === 'welcome') && { display: 'none' }, width: { xs: '100%', sm: 'auto' } }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  ...((currentPage === 'welcome') && { display: 'none' }),
+                  width: { xs: '100%', sm: 'auto' },
+                  alignItems: "center"
+                }}>
                 <Button
                   color="inherit"
                   onClick={() => {
@@ -2614,10 +2622,11 @@ function App() {
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={2}
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                  sx={{ mb: 3 }}
-                >
+                  sx={{
+                    mb: 3,
+                    justifyContent: "space-between",
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                   {sessionUser ? (
                     <Tabs
                       ref={pageTabsRef}
@@ -2714,7 +2723,9 @@ function App() {
                       onChange={(event) =>
                         setEntryDraft((prev) => ({ ...prev, date: event.target.value }))
                       }
-                      InputLabelProps={{ shrink: true }}
+                      slotProps={{
+                        inputLabel: { shrink: true }
+                      }}
                     />
                     <Autocomplete
                       freeSolo
@@ -2742,7 +2753,9 @@ function App() {
                       }
                     />
                     {entryDraft.type === 'deposit' && (
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                        flexWrap: "wrap"
+                      }}>
                         <FormControlLabel
                           control={
                             <Checkbox
@@ -2782,7 +2795,9 @@ function App() {
                         <Typography variant="body2" color="text.secondary">
                           Withdrawal Purpose
                         </Typography>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                          flexWrap: "wrap"
+                        }}>
                           {withdrawalCategoryOptions.map((option) => (
                             <FormControlLabel
                               key={option.value}
@@ -2815,14 +2830,22 @@ function App() {
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Stack spacing={2.5}>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={2}
+                    sx={{
+                      justifyContent: "space-between",
+                      alignItems: { xs: 'stretch', md: 'center' }
+                    }}>
                     <Box>
                       <Typography variant="h6">Search, Filters, and Saved Views</Typography>
                       <Typography variant="body2" color="text.secondary">
                         Narrow the ledger by member, amount, type, notes, and dates. Saved views keep recurring review setups one click away.
                       </Typography>
                     </Box>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap flexWrap="wrap">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} useFlexGap sx={{
+                      flexWrap: "wrap"
+                    }}>
                       <FormControl size="small" sx={{ minWidth: 220 }}>
                         <InputLabel id="saved-ledger-view-label">Saved view</InputLabel>
                         <Select
@@ -2859,7 +2882,9 @@ function App() {
                     </Stack>
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     <TextField
                       label="Search notes, members, and types"
                       value={ledgerFilters.search}
@@ -2939,22 +2964,33 @@ function App() {
                     />
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap" alignItems={{ xs: 'stretch', md: 'center' }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1.5}
+                    useFlexGap
+                    sx={{
+                      alignItems: { xs: 'stretch', md: 'center' },
+                      flexWrap: "wrap"
+                    }}>
                     <TextField
                       type="date"
                       label="Start date"
                       value={statisticsRange.startDate}
                       onChange={(event) => handleStatisticsRangeChange('startDate', event.target.value)}
-                      InputLabelProps={{ shrink: true }}
                       sx={{ minWidth: 170 }}
+                      slotProps={{
+                        inputLabel: { shrink: true }
+                      }}
                     />
                     <TextField
                       type="date"
                       label="End date"
                       value={statisticsRange.endDate}
                       onChange={(event) => handleStatisticsRangeChange('endDate', event.target.value)}
-                      InputLabelProps={{ shrink: true }}
                       sx={{ minWidth: 170 }}
+                      slotProps={{
+                        inputLabel: { shrink: true }
+                      }}
                     />
                     <Button
                       variant="outlined"
@@ -2977,7 +3013,9 @@ function App() {
                     </Button>
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     <Chip label={`Showing ${filteredEntries.length} of ${activeEntries.length} entries`} color="primary" variant={hasActiveLedgerViewFilters ? 'filled' : 'outlined'} />
                     <Chip label={`Date range: ${formatDisplayDate(statisticsRange.startDate)} - ${formatDisplayDate(statisticsRange.endDate)}`} variant="outlined" />
                     {hasActiveLedgerViewFilters && <Chip label="Filtered view active" color="warning" variant="outlined" />}
@@ -2991,17 +3029,20 @@ function App() {
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={2}
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                  sx={{ mb: 2 }}
-                >
+                  sx={{
+                    mb: 2,
+                    justifyContent: "space-between",
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                   <Box>
                     <Typography variant="h6">Statistics</Typography>
                     <Typography variant="body2" color="text.secondary">
                       Aggregates reflect the current filtered ledger view, so reports stay readable as the log grows.
                     </Typography>
                   </Box>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     <Chip label={`Periods shown: ${statisticsRows.filter((row) => !row.isSectionHeader).length}`} variant="outlined" />
                     <Chip label={`Entries in view: ${filteredEntries.length}`} variant="outlined" />
                     <Chip label={`Top donors shown per row: ${filteredEntries.length > 0 ? 'Up to 3' : '0'}`} variant="outlined" />
@@ -3029,10 +3070,11 @@ function App() {
                                 <Stack
                                   direction="row"
                                   spacing={1}
-                                  alignItems="center"
-                                  sx={{ cursor: 'pointer' }}
-                                  onClick={() => toggleStatisticsSection(statisticsRow.section)}
-                                >
+                                  sx={{
+                                    cursor: 'pointer',
+                                    alignItems: "center"
+                                  }}
+                                  onClick={() => toggleStatisticsSection(statisticsRow.section)}>
                                   <IconButton size="small" aria-label={`Toggle ${statisticsRow.section}`}>
                                     {collapsedStatisticsSections[statisticsRow.section] ? (
                                       <ExpandMoreIcon fontSize="small" />
@@ -3046,7 +3088,7 @@ function App() {
                                 </Stack>
                               </TableCell>
                             </TableRow>
-                          )
+                          );
                         }
 
                         if (collapsedStatisticsSections[statisticsRow.section]) {
@@ -3068,7 +3110,9 @@ function App() {
                             <TableCell align="right">{statisticsRow.entryCount ?? 0}</TableCell>
                             <TableCell>
                               {statisticsRow.topDonors?.length ? (
-                                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                                <Stack direction="row" spacing={0.75} useFlexGap sx={{
+                                  flexWrap: "wrap"
+                                }}>
                                   {statisticsRow.topDonors.map((donor) => (
                                     <Chip
                                       key={`${statisticsRow.label}-${donor.rank}-${donor.username}`}
@@ -3091,7 +3135,7 @@ function App() {
                               {fmtGold(grandTotal)}
                             </TableCell>
                           </TableRow>
-                        )
+                        );
                       })}
                     </TableBody>
                   </Table>
@@ -3124,17 +3168,22 @@ function App() {
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={2}
                   useFlexGap
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                  sx={{ mb: 2 }}
-                >
+                  sx={{
+                    mb: 2,
+                    justifyContent: "space-between",
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={2}
                     useFlexGap
-                    alignItems={{ xs: 'stretch', sm: 'center' }}
+                    sx={{
+                      alignItems: { xs: 'stretch', sm: 'center' }
+                    }}
                   >
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                      alignItems: { xs: 'stretch', sm: 'center' }
+                    }}>
                       <Typography variant="h6">Log Entries</Typography>
                       <Chip size="small" label={`${sortedEntries.length} matching`} variant="outlined" />
                     </Stack>
@@ -3466,7 +3515,6 @@ function App() {
           )}
         </Box>
       </Box>
-
       <AuthDialog
         authOpen={authOpen}
         setAuthOpen={setAuthOpen}
@@ -3480,7 +3528,6 @@ function App() {
         handleAuth={handleAuth}
         openPasswordResetRequest={openPasswordResetRequest}
       />
-
       <SettingsDialog
         currentUser={currentUser}
         settingsOpen={settingsOpen}
@@ -3498,7 +3545,6 @@ function App() {
         handleResendVerificationEmail={handleResendVerificationEmail}
         handleOpenDeleteAccountFromSettings={handleOpenDeleteAccountFromSettings}
       />
-
       <PasswordResetRequestDialog
         open={passwordResetRequestOpen}
         onClose={closePasswordResetRequest}
@@ -3509,7 +3555,6 @@ function App() {
         mutationPending={mutationPending}
         handleRequestPasswordReset={handleRequestPasswordReset}
       />
-
       <PasswordResetConfirmDialog
         open={passwordResetConfirmOpen}
         onClose={closePasswordResetConfirm}
@@ -3519,7 +3564,6 @@ function App() {
         mutationPending={mutationPending}
         handleConfirmPasswordReset={handleConfirmPasswordReset}
       />
-
       <DeleteAccountDialog
         deleteAccountOpen={deleteAccountOpen}
         mutationPending={mutationPending}
@@ -3530,7 +3574,6 @@ function App() {
         setDeleteAccountError={setDeleteAccountError}
         handleDeleteAccount={handleDeleteAccount}
       />
-
       <GuildAccessDialog
         guildAccessGuild={guildAccessGuild}
         closeGuildAccess={closeGuildAccess}
@@ -3546,7 +3589,6 @@ function App() {
         handleUpdateGuildMemberRole={handleUpdateGuildMemberRole}
         handleRemoveGuildMember={handleRemoveGuildMember}
       />
-
       <AuditLogDialog
         open={auditLogOpen}
         onClose={handleCloseAuditLog}
@@ -3555,7 +3597,6 @@ function App() {
         auditLogLoading={auditLogLoading}
         auditLogError={auditLogError}
       />
-
       <RankManagementDialog
         open={rankManagementOpen}
         onClose={() => setRankManagementOpen(false)}
@@ -3592,7 +3633,6 @@ function App() {
         }}
         mutationPending={mutationPending}
       />
-
       <CharacterManagementDialog
         open={characterManagementOpen}
         onClose={() => {
@@ -3632,7 +3672,6 @@ function App() {
         }}
         mutationPending={mutationPending}
       />
-
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Export Reports</DialogTitle>
         <DialogContent>
@@ -3687,8 +3726,10 @@ function App() {
                         startDate: event.target.value,
                       }))
                     }
-                    InputLabelProps={{ shrink: true }}
                     fullWidth
+                    slotProps={{
+                      inputLabel: { shrink: true }
+                    }}
                   />
                   <TextField
                     label="End date"
@@ -3700,8 +3741,10 @@ function App() {
                         endDate: event.target.value,
                       }))
                     }
-                    InputLabelProps={{ shrink: true }}
                     fullWidth
+                    slotProps={{
+                      inputLabel: { shrink: true }
+                    }}
                   />
                 </Stack>
               </>
@@ -3734,7 +3777,6 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <Dialog
         open={Boolean(pendingDueSchemeChange)}
         onClose={() => setPendingDueSchemeChange(null)}
@@ -3751,7 +3793,9 @@ function App() {
               {pendingDueSchemeChange?.currentDueScheme || 'monthly'} to{' '}
               {pendingDueSchemeChange?.nextDueScheme || 'weekly'} dues?
             </Typography>
-            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Stack direction="row" spacing={1} useFlexGap sx={{
+              flexWrap: "wrap"
+            }}>
               <Chip
                 label={`Current: ${pendingDueSchemeChange?.currentDueScheme || 'monthly'}`}
                 variant="outlined"
@@ -3777,7 +3821,6 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <Dialog open={Boolean(editingEntry)} onClose={() => setEditingEntry(null)}>
         <DialogTitle>Edit Entry</DialogTitle>
         <DialogContent>
@@ -3825,7 +3868,9 @@ function App() {
                 onChange={(event) =>
                   setEditingEntry((prev) => ({ ...prev, date: event.target.value }))
                 }
-                InputLabelProps={{ shrink: true }}
+                slotProps={{
+                  inputLabel: { shrink: true }
+                }}
               />
               <Autocomplete
                 freeSolo
@@ -3848,7 +3893,9 @@ function App() {
                 minRows={2}
               />
               {editingEntry.type === 'deposit' && (
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                  flexWrap: "wrap"
+                }}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -3888,7 +3935,9 @@ function App() {
                   <Typography variant="body2" color="text.secondary">
                     Withdrawal Purpose
                   </Typography>
-                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap flexWrap="wrap">
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                    flexWrap: "wrap"
+                  }}>
                     {withdrawalCategoryOptions.map((option) => (
                       <FormControlLabel
                         key={option.value}
@@ -3949,16 +3998,14 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <TutorialOverlay open={tutorialOpen} steps={tutorialSteps} onFinish={handleFinishTutorial} />
-
       <NotificationsPopover
         anchorEl={notificationsAnchorEl}
         onClose={handleNotificationsClose}
         notifications={notifications}
       />
     </ThemeProvider>
-  )
+  );
 }
 
 export default App

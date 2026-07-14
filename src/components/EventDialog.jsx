@@ -95,17 +95,21 @@ function EventDialog({ open, onClose, onSave, event = null, initialDate = null }
               fullWidth
               type="datetime-local"
               label="Start Time"
-              InputLabelProps={{ shrink: true }}
               value={draft.startTime}
               onChange={(e) => setDraft({ ...draft, startTime: e.target.value })}
+              slotProps={{
+                inputLabel: { shrink: true }
+              }}
             />
             <TextField
               fullWidth
               type="datetime-local"
               label="End Time"
-              InputLabelProps={{ shrink: true }}
               value={draft.endTime}
               onChange={(e) => setDraft({ ...draft, endTime: e.target.value })}
+              slotProps={{
+                inputLabel: { shrink: true }
+              }}
             />
           </Stack>
           <Stack direction="row" spacing={2}>
@@ -146,7 +150,7 @@ function EventDialog({ open, onClose, onSave, event = null, initialDate = null }
         <Button variant="contained" onClick={handleSave}>Save</Button>
       </DialogActions>
     </Dialog>
-  )
+  );
 }
 
 export default EventDialog

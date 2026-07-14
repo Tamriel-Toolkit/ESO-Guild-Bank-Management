@@ -180,9 +180,10 @@ function DuesDashboardPage({
           <Stack
             direction={{ xs: 'column', md: 'row' }}
             spacing={2}
-            justifyContent="space-between"
-            alignItems={{ xs: 'stretch', md: 'center' }}
-          >
+            sx={{
+              justifyContent: "space-between",
+              alignItems: { xs: 'stretch', md: 'center' }
+            }}>
             <Box>
               <Typography variant="h6">Dues Dashboard</Typography>
               <Typography variant="body2" color="text.secondary">
@@ -231,7 +232,14 @@ function DuesDashboardPage({
               </Button>
             </Stack>
           </Stack>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2 }} useFlexGap flexWrap="wrap">
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{
+              mt: 2,
+              flexWrap: "wrap"
+            }}
+            useFlexGap>
             <Chip label={`Scheme: ${snapshot.duesScheme === 'weekly' ? 'Weekly' : 'Monthly'}`} variant="outlined" />
             <Chip label={`Current cycle: ${snapshot.currentCycle.label}`} color="primary" variant="outlined" />
             <Chip label={`Guild default: ${fmtGold(snapshot.defaultDuesAmount)}`} variant="outlined" />
@@ -250,7 +258,6 @@ function DuesDashboardPage({
           </Typography>
         </CardContent>
       </Card>
-
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
@@ -369,7 +376,9 @@ function DuesDashboardPage({
                           </Stack>
                         </TableCell>
                         <TableCell align="right">
-                          <Stack spacing={1} alignItems="flex-end">
+                          <Stack spacing={1} sx={{
+                            alignItems: "flex-end"
+                          }}>
                             <TextField
                               size="small"
                               label="Dues amount"
@@ -390,7 +399,14 @@ function DuesDashboardPage({
                           </Stack>
                         </TableCell>
                         <TableCell>
-                          <Stack direction="row" spacing={1} alignItems="center" useFlexGap flexWrap="wrap">
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            useFlexGap
+                            sx={{
+                              alignItems: "center",
+                              flexWrap: "wrap"
+                            }}>
                             <Chip
                               size="small"
                               label={statusChip.label}
@@ -460,7 +476,7 @@ function DuesDashboardPage({
                           </Button>
                         </TableCell>
                       </TableRow>
-                    )
+                    );
                   })
                 )}
               </TableBody>
@@ -468,8 +484,9 @@ function DuesDashboardPage({
           </TableContainer>
         </CardContent>
       </Card>
-
-      <Stack ref={historyRef} direction={{ xs: 'column', xl: 'row' }} spacing={3} alignItems="stretch">
+      <Stack ref={historyRef} direction={{ xs: 'column', xl: 'row' }} spacing={3} sx={{
+        alignItems: "stretch"
+      }}>
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -547,7 +564,7 @@ function DuesDashboardPage({
         </Card>
       </Stack>
     </Stack>
-  )
+  );
 }
 
 export default DuesDashboardPage

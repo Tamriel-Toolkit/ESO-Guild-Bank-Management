@@ -86,14 +86,19 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
           </Button>
         </Stack>
       </Box>
-
       {/* Feature Highlights */}
-      <Typography variant="h4" textAlign="center" gutterBottom sx={{ mb: 4 }}>
+      <Typography
+        variant="h4"
+        gutterBottom
+        sx={{
+          mb: 4,
+          textAlign: "center"
+        }}>
         Built for Guild Leaders, by Guild Leaders
       </Typography>
       <Grid container spacing={3} sx={{ mb: 8, justifyContent: 'center', display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' } }}>
         {features.map((feature) => (
-          <Grid item xs={12} sm={6} md={4} key={feature.title}>
+          <Grid xs={12} sm={6} md={4} key={feature.title}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1, textAlign: 'center', p: 4 }}>
                 <Box sx={{ mb: 2 }}>{feature.icon}</Box>
@@ -108,7 +113,6 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
           </Grid>
         ))}
       </Grid>
-
       {/* Action Hub / CTAs */}
       <Card sx={{ p: { xs: 3, md: 6 }, textAlign: 'center', background: 'linear-gradient(180deg, rgba(36, 30, 24, 0.98), rgba(25, 21, 17, 0.98))' }}>
         <Typography variant="h4" gutterBottom>
@@ -120,10 +124,14 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
         <Stack
           direction={{ xs: 'column', sm: 'row' }}
           spacing={3}
-          justifyContent="center"
-          alignItems="center"
-          sx={{ display: 'flex', justifyContent: 'center', flexDirection: { xs: 'column', sm: 'row' }, gap: 4 }}
-        >
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            flexDirection: { xs: 'column', sm: 'row' },
+            gap: 4,
+
+            alignItems: "center"
+          }}>
           <Box>
             <Typography variant="subtitle2" color="primary" sx={{ mb: 1, textTransform: 'uppercase' }}>
               Secure Your Data
@@ -165,7 +173,7 @@ function WelcomePage({ onOpenAuth, onNavigate }) {
         </Stack>
       </Card>
     </Container>
-  )
+  );
 }
 
 export default WelcomePage

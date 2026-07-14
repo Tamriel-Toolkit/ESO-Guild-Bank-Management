@@ -51,15 +51,13 @@ function GuildDiscoveryPage({ onSelectGuild }) {
           Browse guilds that are currently recruiting and find your next home in Tamriel.
         </Typography>
       </Box>
-
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
       {guilds.length === 0 ? (
         <Alert severity="info">No guilds are currently recruiting publicly.</Alert>
       ) : (
         <Grid container spacing={3}>
           {guilds.map((guild) => (
-            <Grid item xs={12} sm={6} md={4} key={guild.id}>
+            <Grid xs={12} sm={6} md={4} key={guild.id}>
               <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 <CardContent sx={{ flexGrow: 1 }}>
                   <Typography variant="h5" gutterBottom sx={{ fontWeight: 700 }}>
@@ -102,7 +100,7 @@ function GuildDiscoveryPage({ onSelectGuild }) {
         </Grid>
       )}
     </Container>
-  )
+  );
 }
 
 export default GuildDiscoveryPage

@@ -76,7 +76,13 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
     <Stack spacing={3}>
       <Card>
         <CardContent sx={{ display: 'flex', flexDirection: 'column' }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            sx={{
+              mb: 2,
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
             <Box>
               <Typography variant="h6">Guild Calendar</Typography>
               <Typography variant="body2" color="text.secondary">
@@ -124,7 +130,6 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
             )}
         </CardContent>
       </Card>
-
       <EventDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
@@ -132,7 +137,6 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
         event={editingEvent}
         initialDate={initialDate}
       />
-
       <EventDetailView
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
@@ -143,7 +147,7 @@ function CalendarPage({ selectedGuild, trackedMembers, canEdit }) {
         canEdit={canEdit}
       />
     </Stack>
-  )
+  );
 }
 
 export default CalendarPage
