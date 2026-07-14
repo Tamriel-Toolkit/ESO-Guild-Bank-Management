@@ -54,9 +54,7 @@ function MyApplications() {
           Track the status of your guild applications.
         </Typography>
       </Box>
-
       {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
-
       {applications.length === 0 ? (
         <Alert severity="info">You haven't submitted any applications yet.</Alert>
       ) : (
@@ -64,7 +62,13 @@ function MyApplications() {
           {applications.map((app) => (
             <Card key={app.id}>
               <CardContent>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                <Stack
+                  direction="row"
+                  sx={{
+                    mb: 2,
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}>
                   <Typography variant="h6">{app.guildName}</Typography>
                   <Chip
                     label={app.status.toUpperCase()}
@@ -98,7 +102,7 @@ function MyApplications() {
         </Stack>
       )}
     </Container>
-  )
+  );
 }
 
 export default MyApplications

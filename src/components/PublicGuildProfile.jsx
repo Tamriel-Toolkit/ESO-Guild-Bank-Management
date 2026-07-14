@@ -86,10 +86,15 @@ function PublicGuildProfile({ guildId, onBack, currentUser }) {
   return (
     <Container maxWidth="md">
       <Button onClick={onBack} sx={{ mb: 3 }}>← Back to Discovery</Button>
-
       <Card sx={{ mb: 4 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+          <Stack
+            direction="row"
+            sx={{
+              mb: 2,
+              justifyContent: "space-between",
+              alignItems: "flex-start"
+            }}>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 700, fontFamily: 'Palatino Linotype, serif' }}>
                 {settings.guildName || 'Guild Profile'}
@@ -134,7 +139,6 @@ function PublicGuildProfile({ guildId, onBack, currentUser }) {
           )}
         </CardContent>
       </Card>
-
       {!success && (
         <Card>
           <CardContent>
@@ -183,14 +187,13 @@ function PublicGuildProfile({ guildId, onBack, currentUser }) {
           </CardContent>
         </Card>
       )}
-
       {success && (
         <Alert severity="success" variant="filled" sx={{ mt: 3 }}>
           {success}
         </Alert>
       )}
     </Container>
-  )
+  );
 }
 
 export default PublicGuildProfile

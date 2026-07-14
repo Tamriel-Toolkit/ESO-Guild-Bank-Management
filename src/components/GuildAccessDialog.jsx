@@ -64,7 +64,9 @@ function GuildAccessDialog({
                     ))}
                   </Select>
                 </FormControl>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'center' }}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{
+                  alignItems: { sm: 'center' }
+                }}>
                   <Button variant="contained" onClick={handleCreateGuildInvite} disabled={mutationPending}>
                     Generate invite code
                   </Button>
@@ -140,7 +142,7 @@ function GuildAccessDialog({
         </Button>
       </DialogActions>
     </Dialog>
-  )
+  );
 }
 
 export default GuildAccessDialog

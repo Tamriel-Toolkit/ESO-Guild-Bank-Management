@@ -83,9 +83,7 @@ function OfficerApplications({ guildId, canEdit, onApplicationReviewed }) {
           Review prospective members and manage their application status.
         </Typography>
       </Box>
-
       {error && <Alert severity="error">{error}</Alert>}
-
       {applications.length === 0 ? (
         <Alert severity="info">No applications received yet.</Alert>
       ) : (
@@ -94,8 +92,14 @@ function OfficerApplications({ guildId, canEdit, onApplicationReviewed }) {
             <Card key={app.id}>
               <CardContent>
                 <Grid container spacing={2}>
-                  <Grid item xs={12} md={8}>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <Grid xs={12} md={8}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{
+                        mb: 1,
+                        alignItems: "center"
+                      }}>
                       <Typography variant="h6">{app.applicantUsername}</Typography>
                       <Chip label={app.status.toUpperCase()} size="small" color={getStatusColor(app.status)} />
                     </Stack>
@@ -116,7 +120,10 @@ function OfficerApplications({ guildId, canEdit, onApplicationReviewed }) {
                     ))}
                   </Grid>
 
-                  <Grid item xs={12} md={4} sx={{ borderLeft: { md: '1px solid rgba(199, 161, 93, 0.16)' } }}>
+                  <Grid
+                    xs={12}
+                    md={4}
+                    sx={{ borderLeft: { md: '1px solid rgba(199, 161, 93, 0.16)' } }}>
                     {reviewingId === app.id ? (
                       <Stack spacing={2}>
                         <Typography variant="subtitle1">Review Application</Typography>
@@ -183,7 +190,7 @@ function OfficerApplications({ guildId, canEdit, onApplicationReviewed }) {
         </Stack>
       )}
     </Stack>
-  )
+  );
 }
 
 export default OfficerApplications

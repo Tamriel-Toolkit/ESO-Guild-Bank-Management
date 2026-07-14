@@ -131,7 +131,6 @@ function TutorialOverlay({ open, steps, onFinish }) {
           transition: 'clip-path 180ms ease, background-color 180ms ease',
         }}
       />
-
       {targetRect && (
         <Box
           sx={{
@@ -148,7 +147,6 @@ function TutorialOverlay({ open, steps, onFinish }) {
           }}
         />
       )}
-
       <Box
         sx={{
           position: 'absolute',
@@ -179,7 +177,13 @@ function TutorialOverlay({ open, steps, onFinish }) {
             {activeStep.body}
           </Typography>
 
-          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
             <Typography variant="caption" sx={{ color: 'rgba(232, 240, 255, 0.58)' }}>
               Step {activeStepIndex + 1} of {steps.length}
             </Typography>
@@ -213,7 +217,7 @@ function TutorialOverlay({ open, steps, onFinish }) {
         </Stack>
       </Box>
     </Box>
-  )
+  );
 }
 
 export default TutorialOverlay

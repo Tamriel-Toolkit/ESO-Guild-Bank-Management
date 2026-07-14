@@ -2477,12 +2477,13 @@ function App() {
               <Stack
                 direction="row"
                 spacing={1}
-                alignItems="center"
                 useFlexGap
                 flexWrap="wrap"
-                justifyContent="flex-end"
-                sx={{ width: { xs: '100%', sm: 'auto' } }}
-              >
+                sx={{
+                  width: { xs: '100%', sm: 'auto' },
+                  alignItems: "center",
+                  justifyContent: "flex-end"
+                }}>
                 <Button
                   color="inherit"
                   onClick={() => {
@@ -2532,7 +2533,14 @@ function App() {
                 </Button>
               </Stack>
             ) : (
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ ...(currentPage === 'welcome') && { display: 'none' }, width: { xs: '100%', sm: 'auto' } }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  ...((currentPage === 'welcome') && { display: 'none' }),
+                  width: { xs: '100%', sm: 'auto' },
+                  alignItems: "center"
+                }}>
                 <Button
                   color="inherit"
                   onClick={() => {
@@ -2614,10 +2622,11 @@ function App() {
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={2}
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                  sx={{ mb: 3 }}
-                >
+                  sx={{
+                    mb: 3,
+                    justifyContent: "space-between",
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                   {sessionUser ? (
                     <Tabs
                       ref={pageTabsRef}
@@ -2815,7 +2824,13 @@ function App() {
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Stack spacing={2.5}>
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'stretch', md: 'center' }}>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={2}
+                    sx={{
+                      justifyContent: "space-between",
+                      alignItems: { xs: 'stretch', md: 'center' }
+                    }}>
                     <Box>
                       <Typography variant="h6">Search, Filters, and Saved Views</Typography>
                       <Typography variant="body2" color="text.secondary">
@@ -2939,7 +2954,9 @@ function App() {
                     />
                   </Stack>
 
-                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap" alignItems={{ xs: 'stretch', md: 'center' }}>
+                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap" sx={{
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                     <TextField
                       type="date"
                       label="Start date"
@@ -2991,10 +3008,11 @@ function App() {
                 <Stack
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={2}
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                  sx={{ mb: 2 }}
-                >
+                  sx={{
+                    mb: 2,
+                    justifyContent: "space-between",
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                   <Box>
                     <Typography variant="h6">Statistics</Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -3029,10 +3047,11 @@ function App() {
                                 <Stack
                                   direction="row"
                                   spacing={1}
-                                  alignItems="center"
-                                  sx={{ cursor: 'pointer' }}
-                                  onClick={() => toggleStatisticsSection(statisticsRow.section)}
-                                >
+                                  sx={{
+                                    cursor: 'pointer',
+                                    alignItems: "center"
+                                  }}
+                                  onClick={() => toggleStatisticsSection(statisticsRow.section)}>
                                   <IconButton size="small" aria-label={`Toggle ${statisticsRow.section}`}>
                                     {collapsedStatisticsSections[statisticsRow.section] ? (
                                       <ExpandMoreIcon fontSize="small" />
@@ -3046,7 +3065,7 @@ function App() {
                                 </Stack>
                               </TableCell>
                             </TableRow>
-                          )
+                          );
                         }
 
                         if (collapsedStatisticsSections[statisticsRow.section]) {
@@ -3124,17 +3143,22 @@ function App() {
                   direction={{ xs: 'column', md: 'row' }}
                   spacing={2}
                   useFlexGap
-                  justifyContent="space-between"
-                  alignItems={{ xs: 'stretch', md: 'center' }}
-                  sx={{ mb: 2 }}
-                >
+                  sx={{
+                    mb: 2,
+                    justifyContent: "space-between",
+                    alignItems: { xs: 'stretch', md: 'center' }
+                  }}>
                   <Stack
                     direction={{ xs: 'column', sm: 'row' }}
                     spacing={2}
                     useFlexGap
-                    alignItems={{ xs: 'stretch', sm: 'center' }}
+                    sx={{
+                      alignItems: { xs: 'stretch', sm: 'center' }
+                    }}
                   >
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{
+                      alignItems: { xs: 'stretch', sm: 'center' }
+                    }}>
                       <Typography variant="h6">Log Entries</Typography>
                       <Chip size="small" label={`${sortedEntries.length} matching`} variant="outlined" />
                     </Stack>
@@ -3466,7 +3490,6 @@ function App() {
           )}
         </Box>
       </Box>
-
       <AuthDialog
         authOpen={authOpen}
         setAuthOpen={setAuthOpen}
@@ -3480,7 +3503,6 @@ function App() {
         handleAuth={handleAuth}
         openPasswordResetRequest={openPasswordResetRequest}
       />
-
       <SettingsDialog
         currentUser={currentUser}
         settingsOpen={settingsOpen}
@@ -3498,7 +3520,6 @@ function App() {
         handleResendVerificationEmail={handleResendVerificationEmail}
         handleOpenDeleteAccountFromSettings={handleOpenDeleteAccountFromSettings}
       />
-
       <PasswordResetRequestDialog
         open={passwordResetRequestOpen}
         onClose={closePasswordResetRequest}
@@ -3509,7 +3530,6 @@ function App() {
         mutationPending={mutationPending}
         handleRequestPasswordReset={handleRequestPasswordReset}
       />
-
       <PasswordResetConfirmDialog
         open={passwordResetConfirmOpen}
         onClose={closePasswordResetConfirm}
@@ -3519,7 +3539,6 @@ function App() {
         mutationPending={mutationPending}
         handleConfirmPasswordReset={handleConfirmPasswordReset}
       />
-
       <DeleteAccountDialog
         deleteAccountOpen={deleteAccountOpen}
         mutationPending={mutationPending}
@@ -3530,7 +3549,6 @@ function App() {
         setDeleteAccountError={setDeleteAccountError}
         handleDeleteAccount={handleDeleteAccount}
       />
-
       <GuildAccessDialog
         guildAccessGuild={guildAccessGuild}
         closeGuildAccess={closeGuildAccess}
@@ -3546,7 +3564,6 @@ function App() {
         handleUpdateGuildMemberRole={handleUpdateGuildMemberRole}
         handleRemoveGuildMember={handleRemoveGuildMember}
       />
-
       <AuditLogDialog
         open={auditLogOpen}
         onClose={handleCloseAuditLog}
@@ -3555,7 +3572,6 @@ function App() {
         auditLogLoading={auditLogLoading}
         auditLogError={auditLogError}
       />
-
       <RankManagementDialog
         open={rankManagementOpen}
         onClose={() => setRankManagementOpen(false)}
@@ -3592,7 +3608,6 @@ function App() {
         }}
         mutationPending={mutationPending}
       />
-
       <CharacterManagementDialog
         open={characterManagementOpen}
         onClose={() => {
@@ -3632,7 +3647,6 @@ function App() {
         }}
         mutationPending={mutationPending}
       />
-
       <Dialog open={exportDialogOpen} onClose={() => setExportDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Export Reports</DialogTitle>
         <DialogContent>
@@ -3734,7 +3748,6 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <Dialog
         open={Boolean(pendingDueSchemeChange)}
         onClose={() => setPendingDueSchemeChange(null)}
@@ -3777,7 +3790,6 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <Dialog open={Boolean(editingEntry)} onClose={() => setEditingEntry(null)}>
         <DialogTitle>Edit Entry</DialogTitle>
         <DialogContent>
@@ -3949,16 +3961,14 @@ function App() {
           </Button>
         </DialogActions>
       </Dialog>
-
       <TutorialOverlay open={tutorialOpen} steps={tutorialSteps} onFinish={handleFinishTutorial} />
-
       <NotificationsPopover
         anchorEl={notificationsAnchorEl}
         onClose={handleNotificationsClose}
         notifications={notifications}
       />
     </ThemeProvider>
-  )
+  );
 }
 
 export default App
