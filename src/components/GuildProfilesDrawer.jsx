@@ -190,6 +190,9 @@ function GuildProfilesDrawer({
                 }}
               >
                 <ListItemText
+                  sx={{ overflow: 'hidden' }}
+                  primaryTypographyProps={{ noWrap: true }}
+                  secondaryTypographyProps={{ noWrap: true }}
                   primary={guild.name}
                   secondary={`${guild.entries.length} entries • ${formatRoleLabel(guild.role)}${guild.isOwner ? '' : ` • Shared by ${guild.ownerUsername}`}`}
                 />
