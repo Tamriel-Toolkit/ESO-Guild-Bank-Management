@@ -72,6 +72,7 @@ function GuildProfilesDrawer({
           label="New guild"
           value={newGuildName}
           onChange={(event) => setNewGuildName(event.target.value)}
+          slotProps={{ htmlInput: { maxLength: 32 } }}
           fullWidth
         />
         <Button
@@ -87,7 +88,7 @@ function GuildProfilesDrawer({
           Add
         </Button>
         </Stack>
-        <Stack spacing={1.5} sx={{ mb: 2 }}>
+        <Stack spacing={1.5} sx={{ mb: 4 }}>
           <Typography variant="subtitle2">Join Shared Guild</Typography>
           {settingsInviteError && <Alert severity="error">{settingsInviteError}</Alert>}
           <TextField
@@ -109,7 +110,7 @@ function GuildProfilesDrawer({
               key={guild.id}
               disablePadding
               secondaryAction={
-                <Stack direction="row" spacing={0.5}>
+                <Stack direction="row" spacing={0.5} sx={{ display: 'flex', overflow: 'auto' }}>
                   <IconButton
                     edge="end"
                     onClick={() => {
