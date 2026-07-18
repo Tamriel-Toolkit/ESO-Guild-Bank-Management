@@ -91,6 +91,8 @@ Recommended Render health check path:
 - `PASSWORD_RESET_TOKEN_TTL_MINUTES`: password reset link lifetime in minutes. Default: `60`
 - `SESSION_COOKIE_NAME`: optional session cookie name override
 - `SESSION_TTL_DAYS`: session lifetime in days. Default: `14`
+- `DISCORD_BOT_TOKEN`: Token for the Discord bot integration.
+- `DISCORD_CLIENT_ID`: Application (Client) ID for the Discord bot.
 
 For local testing without a real SMTP provider, you can set `MAIL_CAPTURE_DIRECTORY` to write outgoing email payloads to disk instead of sending them.
 

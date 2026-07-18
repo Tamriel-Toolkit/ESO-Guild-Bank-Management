@@ -322,6 +322,14 @@ export const deleteWebhookFromGuild = (guildId, webhookId) =>
     method: 'DELETE',
   })
 
+export const getDiscordSettings = (guildId) => apiRequest(`/api/guilds/${guildId}/discord`)
+
+export const updateDiscordSettings = (guildId, payload) =>
+  apiRequest(`/api/guilds/${guildId}/discord`, {
+    method: 'PATCH',
+    body: payload,
+  })
+
 export const getEventsForGuild = (guildId, start, end) =>
   apiRequest(`/api/guilds/${guildId}/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`)
 

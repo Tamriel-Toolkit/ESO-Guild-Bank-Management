@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   AppBar,
   Autocomplete,
@@ -17,12 +20,14 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
+  FormGroup,
   IconButton,
   InputLabel,
   MenuItem,
   Pagination,
   Select,
   Stack,
+  Switch,
   Tab,
   Table,
   TableBody,
@@ -105,6 +110,8 @@ import {
   createWebhookForGuild,
   updateWebhookInGuild,
   deleteWebhookFromGuild,
+  getDiscordSettings,
+  updateDiscordSettings,
 } from './api'
 import AuthDialog from './components/AuthDialog'
 import AuditLogDialog from './components/AuditLogDialog'
@@ -129,6 +136,7 @@ import RankManagementDialog from "./components/RankManagementDialog"
 import CharacterManagementDialog from "./components/CharacterManagementDialog"
 import Graph from './components/Graph'
 import WelcomePage from './components/WelcomePage'
+import DiscordIcon from './components/DiscordIcon'
 import TutorialOverlay from './components/TutorialOverlay'
 import NotificationsPopover from './components/NotificationsPopover'
 import { exportReportBundle, getOverallCurrentGold } from './reportExports'
@@ -953,6 +961,9 @@ function App() {
   const [recruitmentTab, setRecruitmentTab] = useState('settings')
   const [webhooks, setWebhooks] = useState([])
   const [webhooksLoading, setWebhooksLoading] = useState(false)
+  const [discordSettings, setDiscordSettings] = useState(null)
+  const [discordInviteUrl, setDiscordInviteUrl] = useState(null)
+  const [discordLoading, setDiscordLoading] = useState(false)
   const [pendingDueSchemeChange, setPendingDueSchemeChange] = useState(null)
   const [exportDialogOpen, setExportDialogOpen] = useState(false)
   const [exportFormat, setExportFormat] = useState('csv')
@@ -1279,6 +1290,7 @@ function App() {
     setSelectedSavedViewId('')
     if (selectedGuild) {
       loadWebhooks(selectedGuild.id)
+      loadDiscordSettings(selectedGuild.id)
     }
   }, [sessionUser, selectedGuild?.id])
 
@@ -1291,6 +1303,33 @@ function App() {
       console.error(err)
     } finally {
       setWebhooksLoading(false)
+    }
+  }
+
+  const loadDiscordSettings = async (guildId) => {
+    setDiscordLoading(true)
+    try {
+      const response = await getDiscordSettings(guildId)
+      setDiscordSettings(response.settings)
+      setDiscordInviteUrl(response.inviteUrl)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setDiscordLoading(false)
+    }
+  }
+
+  const handleUpdateDiscordSettings = async (payload) => {
+    if (!selectedGuild) return
+    setMutationPending(true)
+    try {
+      await updateDiscordSettings(selectedGuild.id, payload)
+      setSuccessMessage('Discord settings updated.')
+      loadDiscordSettings(selectedGuild.id)
+    } catch (err) {
+      setErrorMessage(err.message)
+    } finally {
+      setMutationPending(false)
     }
   }
 
@@ -3367,7 +3406,7 @@ function App() {
                 >
                   <Tab value="settings" label="Profile & Settings" />
                   <Tab value="applications" label="Applications" />
-                  <Tab value="webhooks" label="Webhooks" />
+                  <Tab value="webhooks" label="Discord Bot" />
                 </Tabs>
                 {recruitmentTab === 'settings' ? (
                   <RecruitmentSettings guildId={selectedGuild.id} canEdit={canEditSelectedGuild} />
@@ -3378,75 +3417,159 @@ function App() {
                     onApplicationReviewed={(user) => setServerUser(user)}
                   />
                 ) : (
-                  <Card>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>Discord Webhooks</Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                        Configure real-time notifications for guild activity.
-                      </Typography>
+                  <Stack spacing={3}>
+                    <Card>
+                      <CardContent>
+                        <Typography variant="h6" gutterBottom>Discord Bot Integration</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                          Sync your guild with Discord to enable interactive summaries and event coordination.
+                        </Typography>
 
-                      <Stack spacing={3}>
-                        {canEditSelectedGuild && (
-                          <Box component="form" onSubmit={(e) => {
-                            e.preventDefault()
-                            const fd = new FormData(e.target)
-                            handleCreateWebhook({
-                              url: fd.get('url'),
-                              channelName: fd.get('channelName'),
-                              eventTypes: ['audit_log', 'application_submitted', 'application_approved', 'event_created', 'daily_summary']
-                            })
-                            e.target.reset()
-                          }}>
-                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                              <TextField name="channelName" label="Channel Name (e.g. #alerts)" required size="small" />
-                              <TextField name="url" label="Webhook URL" required fullWidth size="small" />
-                              <Button type="submit" variant="contained" disabled={mutationPending}>Add Webhook</Button>
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                              New webhooks subscribe to all event types by default.
-                            </Typography>
-                          </Box>
+                        {discordLoading ? <Typography>Loading bot settings...</Typography> : (
+                          <Stack spacing={3}>
+                            {discordInviteUrl && (
+                              <Box sx={{ p: 2, bgcolor: 'rgba(199, 161, 93, 0.05)', border: '1px dashed #c7a15d', borderRadius: 1, textAlign: 'center' }}>
+                                <Typography variant="subtitle2" gutterBottom sx={{ color: '#c7a15d' }}>1. Invite Bot</Typography>
+                                <Button
+                                  variant="outlined"
+                                  startIcon={<DiscordIcon />}
+                                  href={discordInviteUrl}
+                                  target="_blank"
+                                  size="small"
+                                >
+                                  Add to Discord Server
+                                </Button>
+                              </Box>
+                            )}
+
+                            <Box component="form" onSubmit={(e) => {
+                              e.preventDefault()
+                              const fd = new FormData(e.target)
+                              handleUpdateDiscordSettings({
+                                channelId: fd.get('channelId'),
+                                botEnabled: fd.get('botEnabled') === 'on',
+                                eventTypes: discordSettings?.eventTypes || []
+                              })
+                            }}>
+                              <Typography variant="subtitle2" gutterBottom sx={{ color: '#c7a15d' }}>2. Bot Settings</Typography>
+                              <Stack spacing={2}>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+                                  <TextField
+                                    name="channelId"
+                                    label="Target Channel ID"
+                                    defaultValue={discordSettings?.channelId || ''}
+                                    helperText="Right-click a channel in Discord and 'Copy Channel ID'"
+                                    fullWidth
+                                    size="small"
+                                    disabled={!canEditSelectedGuild}
+                                  />
+                                  <FormControlLabel
+                                    control={
+                                      <Switch
+                                        name="botEnabled"
+                                        defaultChecked={discordSettings?.botEnabled}
+                                        disabled={!canEditSelectedGuild}
+                                      />
+                                    }
+                                    label="Bot Active"
+                                  />
+                                </Stack>
+                                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                  <Button type="submit" variant="contained" disabled={mutationPending || !canEditSelectedGuild}>
+                                    Save Config
+                                  </Button>
+                                </Box>
+                              </Stack>
+                            </Box>
+
+                            <Divider>
+                              <Typography variant="caption" color="text.secondary">Notifications</Typography>
+                            </Divider>
+
+                            <FormGroup row>
+                              {['audit_log', 'application_submitted', 'application_approved', 'event_created', 'daily_summary'].map(type => (
+                                <FormControlLabel
+                                  key={type}
+                                  control={
+                                    <Checkbox
+                                      checked={discordSettings?.eventTypes?.includes(type)}
+                                      onChange={(e) => {
+                                        const newTypes = e.target.checked
+                                          ? [...(discordSettings.eventTypes || []), type]
+                                          : (discordSettings.eventTypes || []).filter(t => t !== type)
+                                        handleUpdateDiscordSettings({ ...discordSettings, eventTypes: newTypes })
+                                      }}
+                                      disabled={mutationPending || !canEditSelectedGuild}
+                                    />
+                                  }
+                                  label={type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                />
+                              ))}
+                            </FormGroup>
+                          </Stack>
                         )}
+                      </CardContent>
+                    </Card>
 
-                        <Divider />
+                    <Accordion>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="subtitle2">Legacy Webhooks</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack spacing={3}>
+                          {canEditSelectedGuild && (
+                            <Box component="form" onSubmit={(e) => {
+                              e.preventDefault()
+                              const fd = new FormData(e.target)
+                              handleCreateWebhook({
+                                url: fd.get('url'),
+                                channelName: fd.get('channelName'),
+                                eventTypes: ['audit_log', 'application_submitted', 'application_approved', 'event_created', 'daily_summary']
+                              })
+                              e.target.reset()
+                            }}>
+                              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                                <TextField name="channelName" label="Channel Name" required size="small" />
+                                <TextField name="url" label="Webhook URL" required fullWidth size="small" />
+                                <Button type="submit" variant="contained" disabled={mutationPending}>Add</Button>
+                              </Stack>
+                            </Box>
+                          )}
 
-                        {webhooksLoading ? <Typography>Loading webhooks...</Typography> : (
-                          <TableContainer sx={{ overflowX: 'auto' }}>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Channel</TableCell>
-                                  <TableCell>URL</TableCell>
-                                  <TableCell>Events</TableCell>
-                                  <TableCell align="right">Actions</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {webhooks.length === 0 ? (
-                                  <TableRow><TableCell colSpan={4} align="center">No webhooks configured.</TableCell></TableRow>
-                                ) : webhooks.map(w => (
-                                  <TableRow key={w.id}>
-                                    <TableCell>{w.channel_name}</TableCell>
-                                    <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {w.url}
-                                    </TableCell>
-                                    <TableCell>
-                                      {w.eventTypes.length} types
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <IconButton size="small" color="error" onClick={() => handleDeleteWebhook(w.id)} disabled={mutationPending || !canEditSelectedGuild}>
-                                        <DeleteIcon fontSize="small" />
-                                      </IconButton>
-                                    </TableCell>
+                          {webhooksLoading ? <Typography>Loading webhooks...</Typography> : (
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Channel</TableCell>
+                                    <TableCell>URL</TableCell>
+                                    <TableCell align="right">Actions</TableCell>
                                   </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        )}
-                      </Stack>
-                    </CardContent>
-                  </Card>
+                                </TableHead>
+                                <TableBody>
+                                  {webhooks.length === 0 ? (
+                                    <TableRow><TableCell colSpan={3} align="center">No webhooks configured.</TableCell></TableRow>
+                                  ) : webhooks.map(w => (
+                                    <TableRow key={w.id}>
+                                      <TableCell>{w.channel_name}</TableCell>
+                                      <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {w.url}
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <IconButton size="small" color="error" onClick={() => handleDeleteWebhook(w.id)} disabled={mutationPending || !canEditSelectedGuild}>
+                                          <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          )}
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
+                  </Stack>
                 )}
               </Box>
             )}
